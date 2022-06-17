@@ -1,0 +1,8 @@
+{
+  "tokenMint": "3z5eVUf1dCjsndtiVfnVFFbmkjZn7xBwYF7nhNPzT3HK",
+  "uid": 32,
+  "numClaims": 1,
+  "perUser": 1,
+  "minterPays": false,
+  "tagType": { "hotPotato": true }
+}

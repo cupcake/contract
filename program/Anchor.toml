@@ -1,0 +1,18 @@
+[features]
+seeds = false
+
+[programs.localnet]
+cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
+
+[programs.devnet]
+cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "devnet"
+wallet = "/root/coldwallet.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

@@ -1,0 +1,8 @@
+{
+  "tokenMint": "EDiRA7Xn4ZVN4wHDG4cyJh91avpRsPAY2nuLqKVBZ2Gt",
+  "uid": 12,
+  "numClaims": 10,
+  "perUser": 6,
+  "minterPays": true,
+  "tagType": { "walletRestrictedFungible": true }
+}
