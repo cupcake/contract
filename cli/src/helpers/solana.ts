@@ -10,7 +10,7 @@ import {
   BpfLoader,
   BPF_LOADER_PROGRAM_ID,
 } from '@solana/web3.js';
-import { AnchorProvider, Program } from '@project-serum/anchor';
+import { Provider, Program } from '@project-serum/anchor';
 import { readJSON } from './misc';
 export const WRAPPED_SOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
 export const keypairFromSecretJson = (file: string) => {
@@ -41,7 +41,7 @@ export const sendSOL = async (connection: Connection, from: Keypair, to: PublicK
   );
 };
 
-export const loadAnchorProgram = async (programId: PublicKey, idlFile?: string, provider?: AnchorProvider) => {
+export const loadAnchorProgram = async (programId: PublicKey, idlFile?: string, provider?: Provider) => {
   let idl: any;
   if (!idlFile) {
     idl = await Program.fetchIdl(programId, provider);

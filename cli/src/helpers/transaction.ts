@@ -81,7 +81,13 @@ export async function sendTransactionWithRetry(
 ): Promise<string | { txid: string; slot: number }> {
   const transaction = new Transaction();
   instructions.forEach((instruction) => transaction.add(instruction));
-  transaction.recentBlockhash = (await connection.getLatestBlockhash(commitment)).blockhash;
+  // @ts-ignore
+  const recentBlockhash = await connection._recentBlockhash(
+    // @ts-ignore
+    provider.connection._disableBlockhashCaching
+  )
+
+  transaction.recentBlockhash = recentBlockhash;
 
   transaction.feePayer = wallet.publicKey;
 
@@ -175,7 +181,12 @@ async function simulateTransaction(
   transaction: Transaction,
   commitment: Commitment
 ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
-  transaction.recentBlockhash = (await connection.getLatestBlockhash(commitment)).blockhash;
+  // @ts-ignore
+  const recentBlockhash = await connection._recentBlockhash(
+    // @ts-ignore
+    provider.connection._disableBlockhashCaching
+  )
+  transaction.recentBlockhash = recentBlockhash;
 
   const signData = transaction.serializeMessage();
   // @ts-ignore

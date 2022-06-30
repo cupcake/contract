@@ -1,5 +1,5 @@
 import { MasterEditionV2, Metadata } from '@metaplex-foundation/mpl-token-metadata';
-import { AnchorProvider, BN, BorshAccountsCoder, Program, Wallet } from '@project-serum/anchor';
+import { Provider, BN, BorshAccountsCoder, Program, Wallet } from '@project-serum/anchor';
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 
 import {
@@ -203,7 +203,7 @@ export class CupcakeInstruction {
     const authority =
       accounts.authority ||
       accounts.authorityKeypair?.publicKey ||
-      (this.program.provider as AnchorProvider).wallet.publicKey;
+      (this.program.provider as Provider).wallet.publicKey;
 
     const [config, _configBump] = await getConfig(this.program, authority);
 
@@ -216,7 +216,7 @@ export class CupcakeInstruction {
               .accounts({
                 config,
                 authority,
-                payer: (this.program.provider as AnchorProvider).wallet.publicKey,
+                payer: (this.program.provider as Provider).wallet.publicKey,
                 systemProgram: SystemProgram.programId,
                 rent: SYSVAR_RENT_PUBKEY,
               })
@@ -248,12 +248,12 @@ export class CupcakeInstruction {
     const authority =
       accounts.authority ||
       accounts.authorityKeypair?.publicKey ||
-      (this.program.provider as AnchorProvider).wallet.publicKey;
+      (this.program.provider as Provider).wallet.publicKey;
 
     const tagAuthority =
       accounts.tagAuthority ||
       accounts.tagAuthorityKeypair?.publicKey ||
-      (this.program.provider as AnchorProvider).wallet.publicKey;
+      (this.program.provider as Provider).wallet.publicKey;
 
     const [config, _configBump] = await getConfig(this.program, authority);
     const [tag, _tagBump] = await getTag(this.program, args.uid, authority);
@@ -331,7 +331,7 @@ export class CupcakeInstruction {
                 authority,
                 config,
                 tagAuthority,
-                payer: (this.program.provider as AnchorProvider).wallet.publicKey,
+                payer: (this.program.provider as Provider).wallet.publicKey,
                 tag,
                 systemProgram: SystemProgram.programId,
                 tokenProgram: TOKEN_PROGRAM_ID,
@@ -358,16 +358,16 @@ export class CupcakeInstruction {
     const tagAuthority =
       accounts.tagAuthority ||
       accounts.tagAuthorityKeypair?.publicKey ||
-      (this.program.provider as AnchorProvider).wallet.publicKey;
+      (this.program.provider as Provider).wallet.publicKey;
 
     if (accounts.user && accounts.userKeypair && !accounts.user.equals(accounts.userKeypair.publicKey)) {
       throw new Error('User and user keypair must match if both present');
     }
 
     const user =
-      accounts.user || accounts.userKeypair?.publicKey || (this.program.provider as AnchorProvider).wallet.publicKey;
+      accounts.user || accounts.userKeypair?.publicKey || (this.program.provider as Provider).wallet.publicKey;
 
-    const payer = args.minterPays ? user : (this.program.provider as AnchorProvider).wallet.publicKey;
+    const payer = args.minterPays ? user : (this.program.provider as Provider).wallet.publicKey;
 
     if (
       accounts.newMintAuthority &&
@@ -380,7 +380,7 @@ export class CupcakeInstruction {
     const newMintAuthority =
       accounts.newMintAuthority || accounts.newMintAuthorityKeypair?.publicKey || args.minterPays
         ? accounts.userKeypair.publicKey
-        : (this.program.provider as AnchorProvider).wallet.publicKey;
+        : (this.program.provider as Provider).wallet.publicKey;
 
     const tagObj = additionalArgs.tag;
     const configObj = additionalArgs.config;
@@ -446,7 +446,7 @@ export class CupcakeInstruction {
           createAssociatedTokenAccountInstruction(payer, userAta, user, newTokenInfo.newTokenMint)
         );
         priorInstructions.push(
-          createMintToInstruction(newTokenInfo.newTokenMint, userAta, newMintAuthority, new BN(1))
+          createMintToInstruction(newTokenInfo.newTokenMint, userAta, newMintAuthority, 1)
         );
       }
     } else if (additionalArgs.createAta) {
@@ -483,7 +483,7 @@ export class CupcakeInstruction {
       if (!additionalArgs.nextEdition) throw new Error('Need to set edition');
       if (!accounts.updateAuthority) throw new Error('Need update authority of current token');
       remainingAccounts.push({
-        pubkey: await getEditionMarkPda(tagObj.tokenMint, additionalArgs.nextEdition),
+        pubkey: await getEditionMarkPda(tagObj.tokenMint, additionalArgs.nextEdition.toNumber()),
         isWritable: true,
         isSigner: false,
       });
@@ -642,8 +642,8 @@ export class CupcakeProgram {
       transactions,
       rpc: async () =>
         await sendTransactions(
-          (this.program.provider as AnchorProvider).connection,
-          (this.program.provider as AnchorProvider).wallet,
+          (this.program.provider as Provider).connection,
+          (this.program.provider as Provider).wallet,
           transactions.map((t) => t.instructions),
           transactions.map((t) => t.signers)
         ),
@@ -701,8 +701,8 @@ export class CupcakeProgram {
       transactions,
       rpc: async () =>
         await sendTransactions(
-          (this.program.provider as AnchorProvider).connection,
-          (this.program.provider as AnchorProvider).wallet,
+          (this.program.provider as Provider).connection,
+          (this.program.provider as Provider).wallet,
           transactions.map((t) => t.instructions),
           transactions.map((t) => t.signers)
         ),
@@ -725,7 +725,7 @@ export class CupcakeProgram {
     args.minterPays = tag.minterPays;
     const candyProgram = await this.getCandyProgram();
     const user =
-      accounts.user || accounts.userKeypair?.publicKey || (this.program.provider as AnchorProvider).wallet.publicKey;
+      accounts.user || accounts.userKeypair?.publicKey || (this.program.provider as Provider).wallet.publicKey;
 
     if (tag.tagType.walletRestrictedFungible || tag.tagType.refillable1Of1 || tag.tagType.singleUse1Of1) {
       const userAta = await getAssociatedTokenAddress(tag.tokenMint, user);
@@ -740,7 +740,7 @@ export class CupcakeProgram {
 
       const meObj = MasterEditionV2.fromAccountInfo(masterEdition)[0];
       const mdObj = Metadata.fromAccountInfo(metadata)[0];
-      nextEdition = meObj.supply.toNumber() + 1;
+      nextEdition = (new BN(meObj.supply)).toNumber() + 1;
       accounts.updateAuthority = mdObj.updateAuthority;
     } else if (tag.tagType.candyMachineDrop) {
       const candyMachine = await candyProgram.account.candyMachine.fetch(tag.candyMachine);
@@ -794,8 +794,8 @@ export class CupcakeProgram {
       transactions,
       rpc: async () =>
         await sendTransactions(
-          (this.program.provider as AnchorProvider).connection,
-          (this.program.provider as AnchorProvider).wallet,
+          (this.program.provider as Provider).connection,
+          (this.program.provider as Provider).wallet,
           transactions.map((t) => t.instructions),
           transactions.map((t) => t.signers),
           SequenceType.StopOnFailure,
@@ -817,7 +817,7 @@ export async function getCupcakeProgram(
 
   if (anchorWallet instanceof Keypair) anchorWallet = new NodeWallet(anchorWallet);
 
-  const provider = new AnchorProvider(solConnection, anchorWallet, {
+  const provider = new Provider(solConnection, anchorWallet, {
     preflightCommitment: 'recent',
   });
 
