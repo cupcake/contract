@@ -1,6 +1,6 @@
 {
   "name": "cupcake-cli",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "typings": "dist/helpers/cupcake_program",
   "main": "./dist/helpers/cupcake_program",
   "repository": "https://github.com/cupcake/contract.git",
