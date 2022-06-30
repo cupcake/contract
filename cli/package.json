@@ -3,7 +3,7 @@
   "version": "0.0.28",
   "typings": "dist/helpers/cupcake_program",
   "main": "./dist/helpers/cupcake_program",
-  "repository": "https://github.com/cupcake-io/cupcake-app.git",
+  "repository": "https://github.com/cupcake/contract.git",
   "author": "0xCold and bhgames",
   "license": "MIT",
   "bin": {
@@ -17,9 +17,9 @@
   },
   "dependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^2.1.0",
-    "@project-serum/anchor": "^0.24.2",
+    "@project-serum/anchor": "0.21.0",
     "@solana/spl-token": "^0.2.0",
-    "@solana/web3.js": "^1.39.1",
+    "@solana/web3.js": "1.32.0",
     "aws-sdk": "^2.1117.0",
     "commander": "^9.2.0",
     "dotenv": "^16.0.0",
@@ -27,5 +27,8 @@
     "node-fetch": "^3.2.3",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.3"
+  },
+  "resolutions": {
+    "@solana/web3.js": "1.32.0"
   }
 }

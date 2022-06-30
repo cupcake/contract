@@ -30,7 +30,7 @@
     "@ethersproject/logger" "^5.6.0"
     hash.js "1.1.7"
 
-"@project-serum/anchor@^0.21.0":
+"@project-serum/anchor@0.21.0":
   version "0.21.0"
   resolved "https://registry.yarnpkg.com/@project-serum/anchor/-/anchor-0.21.0.tgz#ad5fb33744991ec1900cdb2fd22707c908b12b5f"
   integrity sha512-flRuW/F+iC8mitNokx82LOXyND7Dyk6n5UUPJpQv/+NfySFrNFlzuQZaBZJ4CG5g9s8HS/uaaIz1nVkDR8V/QA==
