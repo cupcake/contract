@@ -482,8 +482,9 @@ export class CupcakeInstruction {
       remainingAccounts.push({ pubkey: await getMasterEdition(tagObj.tokenMint), isWritable: true, isSigner: false });
       if (!additionalArgs.nextEdition) throw new Error('Need to set edition');
       if (!accounts.updateAuthority) throw new Error('Need update authority of current token');
+      console.log(additionalArgs.nextEdition)
       remainingAccounts.push({
-        pubkey: await getEditionMarkPda(tagObj.tokenMint, additionalArgs.nextEdition.toNumber()),
+        pubkey: await getEditionMarkPda(tagObj.tokenMint, parseInt(additionalArgs.nextEdition.toString())),
         isWritable: true,
         isSigner: false,
       });
