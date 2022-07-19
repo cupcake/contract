@@ -125,30 +125,6 @@ programCommand('add_or_refill_tag', { requireWallet: true })
         }
       )
     ).rpc();
-    /*
-    const kmsKeyId = (
-      await createKeyAWS({
-        Description: 'key for encrypting tag data',
-      })
-    ).KeyMetadata.KeyId;
-    console.log('KMS key created:', kmsKeyId);
-
-    const alias = await addKeyAlias({
-      AliasName: 'alias/panda-nfc/' + tagUID,
-      TargetKeyId: kmsKeyId,
-    });
-    console.log('Key alias added:', alias);
-
-    const ciphertext = (
-      await encryptData({
-        KeyId: kmsKeyId,
-        Plaintext: JSON.stringify(tagKeypair.secretKey),
-      })
-    ).CiphertextBlob;
-    console.log('Tag data encrypted.');
-    // todo: write cache entry to nfc tag
-    cache[tagUID] = ciphertext;
-    writeJSON('.cache/cache.json', cache);*/
   });
 
 programCommand('claim_tag', { requireWallet: true })

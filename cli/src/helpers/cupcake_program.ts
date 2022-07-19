@@ -459,7 +459,7 @@ export class CupcakeInstruction {
     } else if (tagObj.tagType.hotPotato) {
       remainingAccounts.push({ pubkey: tagObj.currentTokenLocation, isWritable: true, isSigner: false });
       remainingAccounts.push({
-        pubkey: (await getUserHotPotatoToken(this.program, tagObj.uid, tagObj.tagAuthority, user, tagObj.tokenMint))[0],
+        pubkey: (await getUserHotPotatoToken(this.program, tagObj.uid, configObj.authority, user, tagObj.tokenMint))[0],
         isWritable: true,
         isSigner: false,
       });
@@ -718,6 +718,7 @@ export class CupcakeProgram {
     rpc: () => Promise<{ number: number; txs: { txid: string; slot: number }[] }>;
   }> {
     const tag = (await this.program.account.tag.fetch(accounts.tag)) as Tag;
+    const config = (await this.program.account.config.fetch(tag.config)) as Config;
 
     let createAta = false;
     let nextEdition = undefined;
@@ -778,7 +779,7 @@ export class CupcakeProgram {
         }
       }
     } else if (tag.tagType.hotPotato) {
-      args.creatorBump = (await getUserHotPotatoToken(this.program, tag.uid, tag.tagAuthority, user, tag.tokenMint))[1];
+      args.creatorBump = (await getUserHotPotatoToken(this.program, tag.uid, config.authority, user, tag.tokenMint))[1];
     }
 
     const addArgs: ClaimTagAdditionalArgs = {
