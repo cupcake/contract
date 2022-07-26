@@ -85,7 +85,7 @@ export async function sendTransactionWithRetry(
   const recentBlockhash = await connection._recentBlockhash(
     // @ts-ignore
     provider.connection._disableBlockhashCaching
-  )
+  );
 
   transaction.recentBlockhash = recentBlockhash;
 
@@ -185,7 +185,7 @@ async function simulateTransaction(
   const recentBlockhash = await connection._recentBlockhash(
     // @ts-ignore
     provider.connection._disableBlockhashCaching
-  )
+  );
   transaction.recentBlockhash = recentBlockhash;
 
   const signData = transaction.serializeMessage();
@@ -283,7 +283,12 @@ async function awaitTransactionSignatureConfirmation(
   });
 
   //@ts-ignore
-  if (connection._subscriptionsByHash[subId]) connection.removeSignatureListener(subId);
+  if (connection._subscriptionsByHash && connection._subscriptionsByHash[subId])
+    connection.removeSignatureListener(subId);
+  //@ts-ignore
+  if (connection._signatureSubscriptions && connection._signatureSubscriptions[subId])
+    connection.removeSignatureListener(subId);
+
   done = true;
   log.debug('Returning status', status);
   return status;
