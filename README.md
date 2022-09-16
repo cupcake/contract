@@ -52,10 +52,6 @@ struct Tag {
   //
   uint256 erc721TokenId;
   //
-  // Indicates if the minter should pay for the claim
-  //
-  bool minterPays;
-  //
   // Indicates the total claimable supply of the token available
   //
   uint256 totalSupply;
@@ -73,6 +69,14 @@ struct Tag {
   mapping (
     address => uint8
   ) claimsMade;
+  //
+  // the uid string from the NFC tag
+  //
+  uint64 uid;
+  //
+  // the address that must have signed for a claim transaction to be valid
+  //
+  address tagAuthority;
   //
   // TODO: Decide if this is needed.
   // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
@@ -99,7 +103,6 @@ interface Contract {
     TagType tagType,
     address tokenAddress,
     uint256 erc721TokenId,
-    bool minterPays,
     uint256 totalSupply,
     uint256 perUser,
     // TODO: Decide if this is needed.
@@ -145,3 +148,7 @@ interface CopyableNFT /* is ERC721 */ {
     function mintMetadataCopy(address indexed _to, uint256 _copyTokenId) external view returns (uint256);
 }
 ```
+
+### Further Expansions
+
+- The ability to define a non-sender as the payer for a claim (`minter_pays = true` from the Solana contract).
