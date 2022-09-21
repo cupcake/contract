@@ -77,12 +77,6 @@ struct Tag {
   // the address that must have signed for a claim transaction to be valid
   //
   address tagAuthority;
-  //
-  // TODO: Decide if this is needed.
-  // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
-  // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
-  //
-  // bool isNotErc1155;
 }
 
 mapping (
@@ -105,7 +99,6 @@ interface Contract {
     uint256 erc721TokenId,
     uint256 totalSupply,
     uint256 perUser,
-    // TODO: Decide if this is needed.
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
     bool isNotErc1155
@@ -118,9 +111,7 @@ interface Contract {
    */
   function claimTag(
     address authorAddress,
-    // TODO: Decide if should be able to be explicitly set, or if it should always be msg.sender
     address receiver,
-    // TODO: Decide if this is needed.
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
     bool isNotErc1155
@@ -132,12 +123,12 @@ interface Contract {
 
 Below are the tag claim distribution schemes along with their associated lowest permitted claimable-token requirements:
 
-- **SingleUse1Of1**, **Refillable1Of1**, **WalletRestrictedFungible**, **CandyMachineDrop**: ERC-1155 (TODO: decide if the lower permitted requirement of ERC-721 should be optionally toggable via the `isNotErc1155` parameter.)
+- **SingleUse1Of1**, **Refillable1Of1**, **WalletRestrictedFungible**, **CandyMachineDrop**: ERC-1155 (or ERC-721 via the `isNotErc1155` parameter.)
 - **HotPotato**: ERC-4907
-- **LimitedOrOpenEdition**: The following interface which extends ERC-721:
+- **LimitedOrOpenEdition**: The following interface which extends ERC-1155:
 
 ```
-interface CopyableNFT /* is ERC721 */ {
+interface CopyableNFT /* is ERC1155 */ {
     // @dev This emits when the an NFT has been copied.
     event Copy(address indexed _to, uint256 indexed _tokenId);
 
