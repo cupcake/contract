@@ -2,22 +2,73 @@
 
 NPM module is "cupcake-cli", represents what is in the CLI folder
 
-## About
+## Usage
 
-# Basic Sample Hardhat Project
+### Testnet
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
+#### NFT Tag
 
-Try running some of the following tasks:
+1) Get some test ETH for the Goerli testnet by clicking [here](https://goerlifaucet.com/).
+2) Mint a test NFT by clicking [here](https://goerli.etherscan.io/address/0x39ec448b891c476e166b3c3242a90830db556661#writeContract#F2) then clicking "Connect to Web3" and inputting the following:
+    - _to: (your wallet address)
+    - _tokenId: (any random / unique number - it must not have been used before by someone else)
+    - _uri: (any url, for example: https://google.com)
+3) Approve the NFT token to be used by the Cupcake Contract by clicking [here](https://goerli.etherscan.io/address/0x39ec448b891c476e166b3c3242a90830db556661#writeContract#F1) then clicking "Connect to Web3" and inputting the following:
+    - _approved: 0x32b78F7269C9fd7F65C8dCD0bD0721B0B522F31C
+    - _tokenId: (the same _tokenId that you entered in the last step)
+4) Add a new Cupcake tag by running the `addOrRefillTag` function and staking the NFT (that we created in the last step) by clicking [here](https://goerli.etherscan.io/address/0x32b78f7269c9fd7f65c8dcd0bd0721b0b522f31c#writeProxyContract#F1) then clicking "Connect to Web3" and inputting the following:
+    - tagType: (one of the following: "1" for SingleUse1Of1 or "2" for Refillable1Of1)
+    - tokenAddress: 0x39ec448b891c476e166b3c3242a90830db556661
+    - erc721TokenId: (the same _tokenId that you entered in the last two steps)
+    - tagAuthority: (your wallet address, this address must send the claim transaction in the next step)
+    - totalSupply: (the maximum number of claims for this tag that you want to permit in total for all users)
+    - perUser: (the maximum number of claims for this tag that you want to permit for each user)
+    - fungiblePerClaim: 0
+    - uid: (any unique number, this must be a number that hasn't been used before by someone else)
+    - isNotErc1155: true
+4) Claim the new Cupcake tag (that you created in the last step) by running the `claimTag` function by clicking [here](https://goerli.etherscan.io/address/0x32b78f7269c9fd7f65c8dcd0bd0721b0b522f31c#writeProxyContract#F2) then clicking "Connect to Web3" and inputting the following:
+    - receiver: (the wallet address that you would like to receive the claimed NFT)
+    - uid: (this must be the same "uid" that you provided in the previous step)
+    - isNotErc1155: true
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
+#### Fungible Tag
+
+1) Get some test ETH for the Goerli testnet by clicking [here](https://goerlifaucet.com/).
+2) Mint a some test ERC-20 token by clicking [here](https://goerli.etherscan.io/address/0xaFF4481D10270F50f203E0763e2597776068CBc5#writeContract#F4) then clicking "Connect to Web3" running the `drip` function.
+3) Approve the ERC-20 token to be used by the Cupcake Contract by clicking [here](https://goerli.etherscan.io/address/0xaFF4481D10270F50f203E0763e2597776068CBc5#writeContract#F1) then clicking "Connect to Web3" and inputting the following:
+    - spender: 0x32b78F7269C9fd7F65C8dCD0bD0721B0B522F31C
+    - tokens: (a number that is more than the "totalSupply" of the token you want to make claimable in the next step)
+4) Add a new Cupcake tag by running the `addOrRefillTag` function and staking the ERC-20 tokens (that we minted in the last step) by clicking [here](https://goerli.etherscan.io/address/0x32b78f7269c9fd7f65c8dcd0bd0721b0b522f31c#writeProxyContract#F1) then clicking "Connect to Web3" and inputting the following:
+    - tagType: 3
+    - tokenAddress: 0xaFF4481D10270F50f203E0763e2597776068CBc5
+    - erc721TokenId: 0
+    - tagAuthority: (your wallet address, this address must send the claim transaction in the next step)
+    - totalSupply: (the maximum number of claims for this tag that you want to permit in total for all users)
+    - perUser: (the maximum number of claims for this tag that you want to permit for each user)
+    - fungiblePerClaim: (the amount of the ERC-20 that you want to giveaway to the user per claim, this must be less than the perUser amount above)
+    - uid: (any unique number, this must be a number that hasn't been used before by someone else)
+    - isNotErc1155: true
+4) Claim the new Cupcake tag (that you created in the last step) by running the `claimTag` function by clicking [here](https://goerli.etherscan.io/address/0x32b78f7269c9fd7f65c8dcd0bd0721b0b522f31c#writeProxyContract#F2) then clicking "Connect to Web3" and inputting the following:
+    - receiver: (the wallet address that you would like to receive the claimed ERC-20 tokens)
+    - uid: (this must be the same "uid" that you provided in the previous step)
+    - isNotErc1155: true
+
+### Compile, Deploy and Upgrade
+
+First, ensure that you have implemented the `.env` file following the format of the [`.env.example`](/.env.example) file.
+
+To deploy:
+
+```
+env $(cat .env) npx hardhat run --network goerli ethereum/scripts/deploy_contract.js
+```
+
+Ensure that the `PROXY_ADDR` env variable is set properly based on the newly deployed contract.
+
+To upgrade:
+
+```
+env $(cat .env) npx hardhat run --network goerli ethereum/scripts/upgrade_contract.js
 ```
 
 ## Ethereum Contract Architecture
