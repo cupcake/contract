@@ -1,11 +1,9 @@
 const { ethers, upgrades } = require("hardhat");
 
-const PROXY = "0x32b78F7269C9fd7F65C8dCD0bD0721B0B522F31C";
-
 async function main() {
   const Contract = await ethers.getContractFactory("Contract");
 
-  await upgrades.upgradeProxy(PROXY, Contract);
+  await upgrades.upgradeProxy(process.env.INFURA_API_KEY, Contract);
   console.log("Upgraded!");
 }
 
