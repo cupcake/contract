@@ -1,9 +1,9 @@
 const { ethers, upgrades } = require("hardhat");
 
 async function main() {
-  const Contract = await ethers.getContractFactory("Contract");
+  const ExampleERC4907 = await ethers.getContractFactory("ExampleERC4907");
 
-  await upgrades.upgradeProxy(process.env.PROXY_ADDR_CONTRACT, Contract);
+  await upgrades.upgradeProxy(process.env.PROXY_ADDR_ERC4907_EXAMPLE, ExampleERC4907);
   console.log("Upgraded!");
 }
 
