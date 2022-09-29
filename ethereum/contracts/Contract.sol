@@ -12,6 +12,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgra
 
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
 
+import "../interfaces/IERC4907Upgradeable.sol";
+
 /*
  * The ContractStorage contract contains all of the Contract's state variables which are then inherited by Contract.
  * Via this seperation of storage and logic we ensure that Contract's state variables come first in the storage layout
@@ -19,6 +21,8 @@ import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
  */
 contract ContractStorage {
   using SafeMathUpgradeable for uint256;
+
+  uint64 constant internal MAX_UINT64 = (2 ** 64) - 1; // Represents the largest possible Unix timestamp
 
   enum TagType {
     // Each claimable NFT is a copy of the master NFT, up to the preset total supply
@@ -116,9 +120,10 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
     bool isNotErc1155
   ) external returns(uint256) {
-    require (totalSupply > 0, 'zero totalSupply');
-    require (perUser > 0, 'zero perUser');
-    require (perUser <= totalSupply, 'perUser > totalSupply');
+    // The following checks are only required when the tagType is not HotPotato
+    require (tagType == TagType.HotPotato || totalSupply > 0, 'zero totalSupply');
+    require (tagType == TagType.HotPotato || perUser > 0, 'zero perUser');
+    require (tagType == TagType.HotPotato || perUser <= totalSupply, 'perUser > totalSupply');
 
     bytes32 tagHash = hashUniqueTag(msg.sender, uid);
 
@@ -179,8 +184,17 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       // Verify that either this tag has never existed before
       require (isNewTag, 'existing tag');
 
-      require(false, 'not implemented');
-      // Use Rentable type
+      Tag storage tag = tags[tagHash];
+      tag.tagType = tagType;
+      tag.tokenAddress = tokenAddress;
+      tag.erc721TokenId = erc721TokenId;
+      tag.tagAuthority = tagAuthority;
+      tag.totalSupply = 1;
+      tag.perUser = 0;
+      tag.fungiblePerClaim = 0;
+      tag.uid = uid;
+      IERC4907Upgradeable token = IERC4907Upgradeable(tokenAddress);
+      token.safeTransferFrom(msg.sender, address(this), erc721TokenId);
     } else if (tagType == TagType.CandyMachineDrop) {
       require(false, 'not implemented');
       // TODO: Implement
@@ -238,8 +252,10 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tags[tagHash].numClaimed += tags[tagHash].fungiblePerClaim;
       tags[tagHash].claimsMade[receiver] += tags[tagHash].fungiblePerClaim;
     } else if (tags[tagHash].tagType == TagType.HotPotato) {
-      require(false, 'not implemented');
-      // Use Rentable type
+      IERC4907Upgradeable token = IERC4907Upgradeable(tags[tagHash].tokenAddress);
+      token.setUser(tags[tagHash].erc721TokenId, receiver, MAX_UINT64);
+      tags[tagHash].numClaimed += 1;
+      tags[tagHash].claimsMade[receiver] += 1;
     } else if (tags[tagHash].tagType == TagType.CandyMachineDrop) {
       require(false, 'not implemented');
       // TODO: Implement

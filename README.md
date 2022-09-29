@@ -63,7 +63,7 @@ To deploy:
 env $(cat .env) npx hardhat run --network goerli ethereum/scripts/deploy_contract.js
 ```
 
-Ensure that the `PROXY_ADDR` env variable is set properly based on the newly deployed contract.
+Ensure that the `PROXY_ADDR_CONTRACT` env variable is set properly based on the newly deployed contract.
 
 To upgrade:
 
