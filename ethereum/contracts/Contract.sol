@@ -135,32 +135,6 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       // Verify that either this tag has never existed before or the supply has been completely drained
       require (isNewTag || tags[tagHash].numClaimed >= tags[tagHash].totalSupply, 'existing tag undrained');
 
-
-
-
-      TagType tagType;
-    // The address of the ERC-1155, ERC-721 or ERC-20 compliant claimable token
-    address tokenAddress;
-    // The token ID of the NFT claimable token (Only used for non-fungible claims)
-    uint256 erc721TokenId;
-    // The address that must have signed for a claim transaction to be valid
-    address tagAuthority;
-    // Indicates the total claimable supply of the token available
-    uint256 totalSupply;
-    // Indicates the total claimable supply of the token available per user
-    uint256 perUser;
-    // Indicates the amount of fungible token to make claimable per claim (only for fungible claims)
-    uint256 fungiblePerClaim;
-    // The uid string from the NFC tag
-    uint256 uid; // uint64 used
-    // Indicates the total number of token claims made so far
-    uint256 numClaimed;
-    // Indicates the number of token claims made by address so far
-    mapping (
-      address => uint256 // uint8 used
-    ) claimsMade;
-
-
       Tag storage tag = tags[tagHash];
       tag.tagType = tagType;
       tag.tokenAddress = tokenAddress;
