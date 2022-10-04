@@ -13,6 +13,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgra
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
 
 import "../interfaces/IERC4907Upgradeable.sol";
+import "../interfaces/IERC721CopyableUpgradeable.sol";
+import "../interfaces/IERC1155CopyableUpgradeable.sol";
 
 /*
  * The ContractStorage contract contains all of the Contract's state variables which are then inherited by Contract.
@@ -120,25 +122,37 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
     bool isNotErc1155
   ) external returns(uint256) {
-    // The following checks are only required when the tagType is not HotPotato
-    require (tagType == TagType.HotPotato || totalSupply > 0, 'zero totalSupply');
-    require (tagType == TagType.HotPotato || perUser > 0, 'zero perUser');
-    require (tagType == TagType.HotPotato || perUser <= totalSupply, 'perUser > totalSupply');
+    // The following checks are only required when the tagType is not HotPotato, SingleUse1Of1, Refillable1Of1
+    require ((tagType == TagType.HotPotato || tagType == TagType.SingleUse1Of1 || tagType == TagType.Refillable1Of1) || totalSupply > 0, 'zero totalSupply');
+    require ((tagType == TagType.HotPotato || tagType == TagType.SingleUse1Of1 || tagType == TagType.Refillable1Of1) || perUser > 0, 'zero perUser');
+    require ((tagType == TagType.HotPotato || tagType == TagType.SingleUse1Of1 || tagType == TagType.Refillable1Of1) || perUser <= totalSupply, 'perUser > totalSupply');
 
     bytes32 tagHash = hashUniqueTag(msg.sender, uid);
 
     bool isNewTag = tags[tagHash].totalSupply == 0;
 
-    require (isNewTag || msg.sender == tags[tagHash].tagAuthority, 'old tag and tagAuth not signer');
-    require (isNewTag || tagType == tags[tagHash].tagType, 'old tag and different tagType');
-
     if (tagType == TagType.LimitedOrOpenEdition) {
       // Verify that either this tag has never existed before or the supply has been completely drained
       require (isNewTag || tags[tagHash].numClaimed >= tags[tagHash].totalSupply, 'existing tag undrained');
 
-      require(false, 'not implemented');
-      // TODO: Use custom Copyable type...
-
+      Tag storage tag = tags[tagHash];
+      tag.tagType = tagType;
+      tag.tokenAddress = tokenAddress;
+      tag.erc721TokenId = erc721TokenId;
+      tag.tagAuthority = tagAuthority;
+      tag.totalSupply = totalSupply;
+      tag.perUser = perUser;
+      tag.fungiblePerClaim = 0;
+      tag.uid = uid;
+      if (isNotErc1155) {
+        IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(tokenAddress);
+        token.safeTransferFrom(msg.sender, address(this), erc721TokenId);
+      } else {
+        IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(tokenAddress);
+        token.safeTransferFrom(msg.sender, address(this), erc721TokenId, 0, "0x00");
+      }
+      tags[tagHash].numClaimed = 0;
+      // tags[tagHash].claimsMade[receiver] = 0;
     } else if (tagType == TagType.SingleUse1Of1 || tagType == TagType.Refillable1Of1) {
       // Verify that either this tag has never existed before or (if tagType is Refillable1Of1) the (fixed) supply of 1 has been completely depleated
       require (isNewTag || (tagType == TagType.Refillable1Of1 && tags[tagHash].numClaimed >= 1), 'existing tag either not a Refillable1Of1 or undrained');
@@ -148,8 +162,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.tokenAddress = tokenAddress;
       tag.erc721TokenId = erc721TokenId;
       tag.tagAuthority = tagAuthority;
-      tag.totalSupply = ((tagType == TagType.SingleUse1Of1) ? 1 : totalSupply);
-      tag.perUser = ((tagType == TagType.SingleUse1Of1) ? 1 : perUser);
+      tag.totalSupply = 1;
+      tag.perUser = 1;
       tag.fungiblePerClaim = 0;
       tag.uid = uid;
       if (isNotErc1155) {
@@ -159,6 +173,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
         IERC1155Upgradeable token = IERC1155Upgradeable(tokenAddress);
         token.safeTransferFrom(msg.sender, address(this), erc721TokenId, 0, "0x00");
       }
+      tags[tagHash].numClaimed = 0;
+      // tags[tagHash].claimsMade[receiver] = 0;
     } else if (tagType == TagType.WalletRestrictedFungible) {
       // Verify that either this tag has never existed before or the supply has been completely drained
       require (isNewTag || tags[tagHash].numClaimed >= tags[tagHash].totalSupply, 'existing fungible tag undrained');
@@ -180,6 +196,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
         IERC1155Upgradeable token = IERC1155Upgradeable(tokenAddress);
         token.safeTransferFrom(msg.sender, address(this), 0, totalSupply, "0x00");
       }
+      tags[tagHash].numClaimed = 0;
+      // tags[tagHash].claimsMade[receiver] = 0;
     } else if (tagType == TagType.HotPotato) {
       // Verify that either this tag has never existed before
       require (isNewTag, 'existing tag');
@@ -195,6 +213,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.uid = uid;
       IERC4907Upgradeable token = IERC4907Upgradeable(tokenAddress);
       token.safeTransferFrom(msg.sender, address(this), erc721TokenId);
+      tags[tagHash].numClaimed = 0;
+      // tags[tagHash].claimsMade[receiver] = 0;
     } else if (tagType == TagType.CandyMachineDrop) {
       require(false, 'not implemented');
       // TODO: Implement
@@ -229,8 +249,15 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // TODO: Adjust require to account for TagType.CandyMachineDrop (once implemented)
 
     if (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) {
-      require(false, 'not implemented');
-      // TODO: Use custom Copyable type...
+      if (isNotErc1155) {
+        IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(tags[tagHash].tokenAddress);
+        token.mintCopy(receiver, tags[tagHash].erc721TokenId);
+      } else {
+        IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(tags[tagHash].tokenAddress);
+        token.mintCopy(receiver, tags[tagHash].erc721TokenId);
+      }
+      tags[tagHash].numClaimed += 1;
+      tags[tagHash].claimsMade[receiver] += 1;
     } else if (tags[tagHash].tagType == TagType.SingleUse1Of1 || tags[tagHash].tagType == TagType.Refillable1Of1) {
       if (isNotErc1155) {
         IERC721Upgradeable token = IERC721Upgradeable(tags[tagHash].tokenAddress);
