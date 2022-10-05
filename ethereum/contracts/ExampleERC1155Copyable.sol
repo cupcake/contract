@@ -5,13 +5,13 @@
  * From: https://github.com/sidarth16/Rentable-NFTs/blob/main/contracts/RentableNft.sol
  */
 
-pragma solidity ^0.8.0; 
+pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC1155URIStorageUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155URIStorageUpgradeable.sol";
 
 import "../interfaces/IERC1155CopyableUpgradeable.sol";
 
-contract ExampleERC721Copyable is ERC1155URIStorageUpgradeable, IERC1155CopyableUpgradeable {
+contract ExampleERC1155Copyable is ERC1155URIStorageUpgradeable, IERC1155CopyableUpgradeable {
 
   function initialize() public initializer {
   	__ERC1155URIStorage_init();

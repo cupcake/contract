@@ -119,7 +119,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     uint256 fungiblePerClaim,
     uint256 uid,
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
-    // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
+    // NOTE: Relevent when `tagType` is not HotPotato
     bool isNotErc1155
   ) external returns(uint256) {
     // The following checks are only required when the tagType is not HotPotato, SingleUse1Of1, Refillable1Of1
@@ -235,8 +235,11 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     address receiver,
     uint256 uid,
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
-    // NOTE: Only relevent when `tagType` is one of the following: LimitedOrOpenEdition, SingleUse1Of1, Refillable1Of1
-    bool isNotErc1155
+    // NOTE: Relevent when `tagType` is not HotPotato
+    bool isNotErc1155,
+    // Indicates the new (copied) asset's token
+    // NOTE: Relevent when `tagType` is LimitedOrOpenEdition; this value must not already exist in the collection.
+    uint256 newTokenId
   ) external returns(address, uint256, uint256) {
     bytes32 tagHash = hashUniqueTag(msg.sender, uid);
 
@@ -251,10 +254,10 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     if (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) {
       if (isNotErc1155) {
         IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(tags[tagHash].tokenAddress);
-        token.mintCopy(receiver, tags[tagHash].erc721TokenId);
+        token.mintCopy(receiver, tags[tagHash].erc721TokenId, newTokenId);
       } else {
         IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(tags[tagHash].tokenAddress);
-        token.mintCopy(receiver, tags[tagHash].erc721TokenId);
+        token.mintCopy(receiver, tags[tagHash].erc721TokenId, newTokenId);
       }
       tags[tagHash].numClaimed += 1;
       tags[tagHash].claimsMade[receiver] += 1;
