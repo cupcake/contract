@@ -2,7 +2,7 @@
 require("@nomiclabs/hardhat-ethers");
 require("@openzeppelin/hardhat-upgrades");
 require("@nomiclabs/hardhat-etherscan");
-// require('hardhat-contract-sizer');
+require('hardhat-contract-sizer');
 
 module.exports = {
   solidity: "0.8.17",
@@ -18,11 +18,11 @@ module.exports = {
   paths: {
     root: "./ethereum"
   },
-  // contractSizer: {
-  //   alphaSort: true,
-  //   disambiguatePaths: false,
-  //   runOnCompile: true,
-  //   strict: true,
-  //   only: [],
-  // },
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true,
+    only: [],
+  },
 };
