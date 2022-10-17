@@ -16,6 +16,9 @@ contract CandyMachineStorage {
   uint256 numURIsExisting;
   uint256 nonce;
   address owner;
+
+  // Optional mapping for token URIs
+  mapping(uint256 => bool) public mintedTokenIds;
 }
 
 contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URIStorageUpgradeable {
@@ -28,8 +31,9 @@ contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URISto
    */
   function initialize(string[] calldata _metadataURIs, address _owner) public onlyInitializing {
     __ERC1155URIStorage_init_unchained();
+    require(_metadataURIs.length > 0, 'empty _metadataURIs passed');
 
-    for (uint256 i = 0; i < 10; i++) {
+    for (uint256 i = 0; i < _metadataURIs.length; i++) {
       _setURI(i, _metadataURIs[i]);
     }
 
@@ -62,14 +66,41 @@ contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URISto
   }
 
   /*
+   * @notice Check if the CandyMachine has been cancelled or is depleted.
+   */
+  function isFinished() view public returns(bool) {
+    return (numURIsExisting == 0);
+  }
+
+  /*
    * @notice Mint an ERC-1155 asset with a pseudo-randomly selected metadata URI.
    */
   function mint(address _recipient) external onlyOwner {
+    require(!isFinished(), 'CandyMachine cancelled');
     uint256 randomNum = _randomNumber();
-    while (balanceOf(_recipient, randomNum) > 0) {
+    uint256 i = 0;
+    while (mintedTokenIds[randomNum] && i < numURIsExisting) {
       randomNum = _randomNumber();
+      i++;
+    }
+    if(!mintedTokenIds[randomNum]) {
+      numURIsExisting = 0;
+      revert('CandyMachine depleted');
     }
 
     _mint(_recipient, randomNum, 1, "0x00");
+    mintedTokenIds[randomNum] = true;
+  }
+
+  /*
+   * @notice Cancel the CandyMachine. This means that no further NFTs can be minted.
+   */
+  function cancel() external onlyOwner {
+    for (uint256 i = 0; i < numURIsExisting; i++) {
+      if (!mintedTokenIds[i]) {
+        _setURI(i, "");
+      }
+    }
+    numURIsExisting = 0;
   }
 }
