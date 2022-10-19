@@ -94,6 +94,7 @@ contract ContractStorage {
 }
 
 contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC721HolderUpgradeable, ERC1155HolderUpgradeable {
+  using SafeMathUpgradeable for uint256;
 
   ////////////////////////////////////////////////
   //////// I N I T I A L I Z E R
