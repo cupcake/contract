@@ -17,11 +17,11 @@ contract CandyMachineStorage {
   uint256 nonce;
   address owner;
 
-  // Optional mapping for token URIs
   mapping(uint256 => bool) public mintedTokenIds;
 }
 
 contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URIStorageUpgradeable {
+  using SafeMathUpgradeable for uint256;
 
   ////////////////////////////////////////////////
   //////// I N I T I A L I Z E R
