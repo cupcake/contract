@@ -12,6 +12,9 @@ import "./CandyMachine.sol";
  * and that Contract has the ability to change the list of contracts it inherits from in the future via upgradeability.
  */
 contract CandyMachineFactory is ICandyMachineFactory, UUPSUpgradeable, OwnableUpgradeable {
+  
+  event Creation(address indexed _newCandyMachine);  
+
   /*
    * Initalizes the state variables.
    */
@@ -24,9 +27,14 @@ contract CandyMachineFactory is ICandyMachineFactory, UUPSUpgradeable, OwnableUp
    */
   function _authorizeUpgrade(address) internal override onlyOwner {}
 
-  function newCandyMachine(string[] calldata _metadataURIs, address _owner) external returns(address newCM) {
+  /*
+   * @notice Creates a new CandyMachine contract.
+   * @dev Initalizes the new CandyMachine using the passed arguments and emits a {Creation} event.
+   */
+  function newCandyMachine(string[] calldata _metadataURIs, address _owner) external returns(address) {
     CandyMachine candyMachine = new CandyMachine();
     candyMachine.initialize(_metadataURIs, _owner);
+    emit Creation(address(candyMachine));
     return address(candyMachine);
   }
 }

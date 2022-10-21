@@ -21,11 +21,27 @@ contract RentableWrapperStorage {
   using SafeMathUpgradeable for uint256;
   using CountersUpgradeable for CountersUpgradeable.Counter;
 
+  /// @notice This emits when an underlying NFT is wrapped.
+  event Wrap(
+    address indexed _asset,
+    uint256 indexed _underlyingTokenId,
+    uint256 indexed _wrappedTokenId,
+    address _tokenDepositor
+  );
+
+  /// @notice This emits when an underlying NFT is unwrapped.
+  event Unwrap(
+    address indexed _asset,
+    uint256 indexed _underlyingTokenId,
+    uint256 indexed _wrappedTokenId,
+    address _tokenDepositor
+  );
+
   CountersUpgradeable.Counter internal tokenIdCounter;
 
   struct Token {
     IERC721MetadataUpgradeable asset;  // the address of the underlying wrapped asset
-    uint256 tokenId;                   // the tokenId of the underlying wrapped asset
+    uint256 underlyingTokenId;         // the tokenId of the underlying wrapped asset
     address user;                      // address of user role
     uint64 expires;                    // unix timestamp, user expires
   }
@@ -51,27 +67,34 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
    * @notice wrap an NFT inside a newly minted wrapper NFT
    * @dev The user must own the NFT that is being wrapped
    * @param _asset    The address of the token that we would like to wrap
-   * @param _tokenId  The tokenId of the token that we would like to wrap
+   * @param _underlyingTokenId  The tokenId of the token that we would like to wrap
    * @return _newTokenId  The tokenId of the newly generated wrapper token
    */
-  function wrap(IERC721MetadataUpgradeable _asset, uint256 _tokenId) external returns(uint256 _newTokenId) {
-    require(_asset.ownerOf(_tokenId) == msg.sender, 'asset not owned by msg.sender');
+  function wrap(IERC721MetadataUpgradeable _asset, uint256 _underlyingTokenId) external returns(uint256 _newTokenId) {
+    require(_asset.ownerOf(_underlyingTokenId) == msg.sender, 'asset not owned by msg.sender');
 
     _asset.safeTransferFrom(
       msg.sender,
       address(this),
-      _tokenId
+      _underlyingTokenId
     );
 
-    require(_asset.ownerOf(_tokenId) == address(this), 'asset transfer failed');
+    require(_asset.ownerOf(_underlyingTokenId) == address(this), 'asset transfer failed');
 
     _safeMint(msg.sender, tokenIdCounter.current());
 
     Token storage token = tokens[tokenIdCounter.current()];
     token.asset = _asset;
-    token.tokenId = _tokenId;
+    token.underlyingTokenId = _underlyingTokenId;
 
     tokenIdCounter.increment();
+
+    emit Wrap(
+      address(_asset),
+      _underlyingTokenId,
+      tokenIdCounter.current() - 1,
+      msg.sender
+    );
 
     return tokenIdCounter.current() - 1;
   }
@@ -88,12 +111,19 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
     tokens[_wrappedTokenId].asset.safeTransferFrom(
       address(this),
       msg.sender,
-      tokens[_wrappedTokenId].tokenId
+      tokens[_wrappedTokenId].underlyingTokenId
     );
 
-    require(tokens[_wrappedTokenId].asset.ownerOf(tokens[_wrappedTokenId].tokenId) == msg.sender, 'asset transfer failed');
+    require(tokens[_wrappedTokenId].asset.ownerOf(tokens[_wrappedTokenId].underlyingTokenId) == msg.sender, 'asset transfer failed');
 
     delete tokens[_wrappedTokenId];
+
+    emit Unwrap(
+      address(tokens[_wrappedTokenId].asset),
+      tokens[_wrappedTokenId].underlyingTokenId,
+      _wrappedTokenId,
+      msg.sender
+    );
   }
 
   function isWrapped(uint256 _wrappedTokenId) public view returns(bool) {
@@ -107,7 +137,7 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
   function tokenURI(uint256 _wrappedTokenId) public view virtual override returns (string memory) {
     require(isWrapped(_wrappedTokenId), 'token not wrapped');
 
-    return tokens[_wrappedTokenId].asset.tokenURI(tokens[_wrappedTokenId].tokenId);
+    return tokens[_wrappedTokenId].asset.tokenURI(tokens[_wrappedTokenId].underlyingTokenId);
   }
 
   /**

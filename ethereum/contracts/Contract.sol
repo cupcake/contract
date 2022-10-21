@@ -25,6 +25,36 @@ import "./CandyMachineFactory.sol";
 contract ContractStorage {
   using SafeMathUpgradeable for uint256;
 
+  event TagCreationOrRefill(
+    address _bakery,
+    TagType _tagType,
+    address indexed _assetAddress,
+    uint256 _erc721TokenId,
+    address indexed _tagAuthority,
+    uint256 _totalSupply,
+    uint256 _perUser,
+    uint256 _fungiblePerClaim,
+    uint256 indexed _uid,
+    bool _isNotErc1155
+  );
+
+  event TagClaim(
+    address _bakery,
+    address indexed _recipient,
+    address indexed _assetAddress,
+    uint256 _erc721TokenId,
+    uint256 _fungiblePerClaim,
+    uint256 indexed _uid,
+    bool _isNotErc1155
+  );
+
+  event Cancellation(
+    address indexed _bakery,
+    uint256 indexed _uid,
+    bool _isNotErc1155,
+    uint256 indexed _numClaimed
+  );
+
   uint64 constant internal MAX_UINT64 = (2 ** 64) - 1; // Represents the largest possible Unix timestamp
 
   address candyMachineFactoryAddr;
@@ -40,9 +70,7 @@ contract ContractStorage {
     WalletRestrictedFungible,
     // Only one NFT that is temporarily held by the claimer, possession is transferred after each subsequent claim
     HotPotato,
-    // Each claimable NFT is randomly selected from a predefined set (NFTs may be from multiple collections),
-    // up to the preset total supply
-    // TODO: Architect using contract factory
+    // Each claimable NFT is randomly selected from a predefined set up to the preset total supply
     CandyMachineDrop
   }
 
@@ -88,7 +116,7 @@ contract ContractStorage {
   }
 
   mapping (
-    // tag's unique address
+    // tag's unique identifier, see the hashUniqueTag() function below to see how the bytes32 is generated.
     bytes32 => Tag
   ) public tags;
 }
@@ -118,8 +146,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
   /*
    * @notice The hash function used to identify unique tags
    */
-  function hashUniqueTag(address bakeryPubkey, uint256 tagUid) internal pure returns (bytes32) {
-    return keccak256(abi.encodePacked(bakeryPubkey, tagUid));
+  function hashUniqueTag(address _bakeryPubkey, uint256 _tagUid) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked(_bakeryPubkey, _tagUid));
   }
 
   /*
@@ -133,7 +161,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // Indicates the metadata URIs to use for the new NFT assets in CandyMachine
     // NOTE: Relevent when `tagType` is CandyMachineDrop
     string[] calldata _metadataURIs
-  ) external {
+  ) external onlyOwner {
     // The following checks are only required when the tagType is not HotPotato, SingleUse1Of1, Refillable1Of1
     require (_passedTag.tagType == TagType.HotPotato || _passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1 || _passedTag.totalSupply > 0, 'zero totalSupply');
     require (_passedTag.tagType == TagType.HotPotato || _passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1 || _passedTag.perUser > 0, 'zero perUser');
@@ -220,6 +248,19 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.fungiblePerClaim = 0;
     }
     tag.numClaimed = 0;
+
+    emit TagCreationOrRefill(
+      msg.sender,
+      tag.tagType,
+      tag.assetAddress,
+      tag.erc721TokenId,
+      tag.tagAuthority,
+      tag.totalSupply,
+      tag.perUser,
+      tag.fungiblePerClaim,
+      tag.uid,
+      _isNotErc1155
+    );
   }
 
   /*
@@ -237,7 +278,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // Indicates the new (copied) asset's token
     // NOTE: Relevent when `tagType` is LimitedOrOpenEdition; this value must not already exist in the collection.
     uint256 _newTokenId
-  ) external returns(address, uint256, uint256) {
+  ) external onlyOwner returns(address, uint256, uint256) {
     bytes32 tagHash = hashUniqueTag(msg.sender, _uid);
 
     require (tags[tagHash].totalSupply > 0, 'tag not existent or depleted');
@@ -286,7 +327,21 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tags[tagHash].claimsMade[_recipient] += 1;
     }
 
-    return (tags[tagHash].assetAddress, tags[tagHash].erc721TokenId, tags[tagHash].fungiblePerClaim);
+    emit TagClaim(
+      msg.sender,
+      _recipient,
+      tags[tagHash].assetAddress,
+      tags[tagHash].erc721TokenId,
+      tags[tagHash].fungiblePerClaim,
+      tags[tagHash].uid,
+      _isNotErc1155
+    );
+
+    return (
+      tags[tagHash].assetAddress,
+      (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) ? _newTokenId : tags[tagHash].erc721TokenId,
+      tags[tagHash].fungiblePerClaim
+    );
   }
 
   /*
@@ -297,7 +352,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Relevent when `tagType` is not HotPotato
     bool _isNotErc1155
-  ) external {
+  ) external onlyOwner {
     bytes32 tagHash = hashUniqueTag(msg.sender, _uid);
 
     require (tags[tagHash].totalSupply > 0, 'tag not existent or depleted');
@@ -338,14 +393,14 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       candyMachine.cancel();
     }
 
+    emit Cancellation(
+      msg.sender,
+      _uid,
+      _isNotErc1155,
+      tags[tagHash].numClaimed
+    );
+
     // Default everything
-    tags[tagHash].uid = 0;
-    tags[tagHash].tagAuthority = address(0);
-    tags[tagHash].assetAddress = address(0);
-    tags[tagHash].erc721TokenId = 0;
-    tags[tagHash].totalSupply = 0;
-    tags[tagHash].perUser = 0;
-    tags[tagHash].fungiblePerClaim = 0;
-    tags[tagHash].numClaimed = 0;
+    delete tags[tagHash];
   }
 }
