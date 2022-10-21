@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.17;
 
-// import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155URIStorageUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
 
@@ -20,7 +19,7 @@ contract CandyMachineStorage {
   mapping(uint256 => bool) public mintedTokenIds;
 }
 
-contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URIStorageUpgradeable {
+contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
   using SafeMathUpgradeable for uint256;
 
   ////////////////////////////////////////////////
@@ -42,6 +41,10 @@ contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URISto
     owner = _owner;
   }
 
+  /*
+   * Modifier to ensure that only the designated "owner" can access the associated function.
+   * NOTE: This modifier should NOT be confused with OwnableUpgradeable's modifier by the same name.
+   */
   modifier onlyOwner {
     require(msg.sender == owner, 'caller not owner');
     _;
@@ -49,11 +52,6 @@ contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URISto
 
   ////////////////////////////////////////////////
   //////// F U N C T I O N S
-
-  /*
-   * @notice Authorizes contract upgrades only for the contract owner (contract deployer) via the onlyOwner modifier.
-   */
-  // function _authorizeUpgrade(address) internal override onlyOwner {}
 
   /*
    * @notice Generates a pseudo-random number between 0 and the numURIsExisting state variable.
@@ -74,6 +72,7 @@ contract CandyMachine is CandyMachineStorage, /*UUPSUpgradeable, */ERC1155URISto
 
   /*
    * @notice Mint an ERC-1155 asset with a pseudo-randomly selected metadata URI.
+   * @dev Emits a {TransferSingle} event.
    */
   function mint(address _recipient) external onlyOwner {
     require(!isFinished(), 'CandyMachine cancelled');
