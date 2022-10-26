@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 interface ICandyMachineFactory {
-  function newCandyMachine(string[] calldata _metadataURIs, address _owner) external returns(address newCM);
+  function newCandyMachine(string[] calldata metadataURIs, address owner) external returns(address);
 }

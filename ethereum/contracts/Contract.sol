@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -26,33 +26,33 @@ contract ContractStorage {
   using SafeMathUpgradeable for uint256;
 
   event TagCreationOrRefill(
-    address _bakery,
-    TagType _tagType,
-    address indexed _assetAddress,
-    uint256 _erc721TokenId,
-    address indexed _tagAuthority,
-    uint256 _totalSupply,
-    uint256 _perUser,
-    uint256 _fungiblePerClaim,
-    uint256 indexed _uid,
-    bool _isNotErc1155
+    address bakery,
+    TagType tagType,
+    address indexed assetAddress,
+    uint256 erc721TokenId,
+    address indexed tagAuthority,
+    uint256 totalSupply,
+    uint256 perUser,
+    uint256 fungiblePerClaim,
+    uint256 indexed uid,
+    bool isNotErc1155
   );
 
   event TagClaim(
-    address _bakery,
-    address indexed _recipient,
-    address indexed _assetAddress,
-    uint256 _erc721TokenId,
-    uint256 _fungiblePerClaim,
-    uint256 indexed _uid,
-    bool _isNotErc1155
+    address bakery,
+    address indexed recipient,
+    address indexed assetAddress,
+    uint256 erc721TokenId,
+    uint256 fungiblePerClaim,
+    uint256 indexed uid,
+    bool isNotErc1155
   );
 
   event Cancellation(
-    address indexed _bakery,
-    uint256 indexed _uid,
-    bool _isNotErc1155,
-    uint256 indexed _numClaimed
+    address indexed bakery,
+    uint256 indexed uid,
+    bool isNotErc1155,
+    uint256 indexed numClaimed
   );
 
   uint64 constant internal MAX_UINT64 = (2 ** 64) - 1; // Represents the largest possible Unix timestamp
@@ -127,12 +127,18 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
   ////////////////////////////////////////////////
   //////// I N I T I A L I Z E R
 
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() {
+    _disableInitializers();
+  }
+
   /*
    * Initalizes the state variables.
    */
-  function initialize(address _candyMachineFactoryAddr) public initializer {
+  function initialize(address candyMachineFactoryAddrArg) external initializer {
+    require(candyMachineFactoryAddrArg != address(0), 'factoryAddr cannot be 0-addr');
     __Ownable_init();
-    candyMachineFactoryAddr = _candyMachineFactoryAddr;
+    candyMachineFactoryAddr = candyMachineFactoryAddrArg;
   }
 
   ////////////////////////////////////////////////
@@ -146,108 +152,112 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
   /*
    * @notice The hash function used to identify unique tags
    */
-  function hashUniqueTag(address _bakeryPubkey, uint256 _tagUid) internal pure returns (bytes32) {
-    return keccak256(abi.encodePacked(_bakeryPubkey, _tagUid));
+  function hashUniqueTag(address bakeryPubkey, uint256 tagUid) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked(bakeryPubkey, tagUid));
   }
 
   /*
    * @notice Add or refill ERC-1155 assets that can be claimed for a specified tag
    */
   function addOrRefillTag(
-    TagPassed calldata _passedTag,
+    TagPassed calldata passedTag,
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Relevent when `tagType` is not HotPotato
-    bool _isNotErc1155,
+    bool isNotErc1155,
     // Indicates the metadata URIs to use for the new NFT assets in CandyMachine
     // NOTE: Relevent when `tagType` is CandyMachineDrop
-    string[] calldata _metadataURIs
+    string[] calldata metadataURIs
   ) external onlyOwner {
     // The following checks are only required when the tagType is not HotPotato, SingleUse1Of1, Refillable1Of1
-    require (_passedTag.tagType == TagType.HotPotato || _passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1 || _passedTag.totalSupply > 0, 'zero totalSupply');
-    require (_passedTag.tagType == TagType.HotPotato || _passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1 || _passedTag.perUser > 0, 'zero perUser');
-    require (_passedTag.tagType == TagType.HotPotato || _passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1 || _passedTag.perUser <= _passedTag.totalSupply, 'perUser > totalSupply');
+    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.totalSupply > 0, 'zero totalSupply');
+    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.perUser > 0, 'zero perUser');
+    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.perUser <= passedTag.totalSupply, 'perUser > totalSupply');
 
-    bytes32 tagHash = hashUniqueTag(msg.sender, _passedTag.uid);
+    bytes32 tagHash = hashUniqueTag(msg.sender, passedTag.uid);
 
     bool isCleanTag = tags[tagHash].totalSupply == 0;
 
     Tag storage tag = tags[tagHash];
-    tag.tagType = _passedTag.tagType;
-    tag.uid = _passedTag.uid;
-    tag.tagAuthority = _passedTag.tagAuthority;
+    tag.tagType = passedTag.tagType;
+    tag.uid = passedTag.uid;
+    tag.tagAuthority = passedTag.tagAuthority;
 
-    if (_passedTag.tagType == TagType.LimitedOrOpenEdition) {
+    if (passedTag.tagType == TagType.LimitedOrOpenEdition) {
       // Verify that either this tag has never existed before or the supply has been completely drained
       require (isCleanTag || tags[tagHash].numClaimed >= tags[tagHash].totalSupply, 'existing tag undrained');
 
-      tag.assetAddress = _passedTag.assetAddress;
-      tag.erc721TokenId = _passedTag.erc721TokenId;
-      tag.totalSupply = _passedTag.totalSupply;
-      tag.perUser = _passedTag.perUser;
+      tag.assetAddress = passedTag.assetAddress;
+      tag.erc721TokenId = passedTag.erc721TokenId;
+      tag.totalSupply = passedTag.totalSupply;
+      tag.perUser = passedTag.perUser;
       tag.fungiblePerClaim = 0;
-      if (_isNotErc1155) {
-        IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(_passedTag.assetAddress);
-        token.safeTransferFrom(msg.sender, address(this), _passedTag.erc721TokenId);
+      tag.numClaimed = 0;
+      if (isNotErc1155) {
+        IERC721CopyableUpgradeable tokenERC721Copyable = IERC721CopyableUpgradeable(passedTag.assetAddress);
+        tokenERC721Copyable.safeTransferFrom(msg.sender, address(this), passedTag.erc721TokenId);
       } else {
-        IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(_passedTag.assetAddress);
-        token.safeTransferFrom(msg.sender, address(this), _passedTag.erc721TokenId, 0, "0x00");
+        IERC1155CopyableUpgradeable tokenERC1155Copyable = IERC1155CopyableUpgradeable(passedTag.assetAddress);
+        tokenERC1155Copyable.safeTransferFrom(msg.sender, address(this), passedTag.erc721TokenId, 0, "0x00");
       }
-    } else if (_passedTag.tagType == TagType.SingleUse1Of1 || _passedTag.tagType == TagType.Refillable1Of1) {
-      // Verify that either this tag has never existed before or (if _passedTag.tagType is Refillable1Of1) the (fixed) supply of 1 has been completely depleted
-      require (isCleanTag || (_passedTag.tagType == TagType.Refillable1Of1 && tags[tagHash].numClaimed >= 1), 'existing tag either not a Refillable1Of1 or undrained');
+    } else if (passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1) {
+      // Verify that either this tag has never existed before or (if passedTag.tagType is Refillable1Of1) the (fixed) supply of 1 has been completely depleted
+      require (isCleanTag || (passedTag.tagType == TagType.Refillable1Of1 && tags[tagHash].numClaimed >= 1), 'existing tag either not a Refillable1Of1 or undrained');
 
-      tag.assetAddress = _passedTag.assetAddress;
-      tag.erc721TokenId = _passedTag.erc721TokenId;
+      tag.assetAddress = passedTag.assetAddress;
+      tag.erc721TokenId = passedTag.erc721TokenId;
       tag.totalSupply = 1;
       tag.perUser = 1;
       tag.fungiblePerClaim = 0;
-      if (_isNotErc1155) {
-        IERC721Upgradeable token = IERC721Upgradeable(_passedTag.assetAddress);
-        token.safeTransferFrom(msg.sender, address(this), _passedTag.erc721TokenId);
+      tag.numClaimed = 0;
+      if (isNotErc1155) {
+        IERC721Upgradeable tokenERC721 = IERC721Upgradeable(passedTag.assetAddress);
+        tokenERC721.safeTransferFrom(msg.sender, address(this), passedTag.erc721TokenId);
       } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(_passedTag.assetAddress);
-        token.safeTransferFrom(msg.sender, address(this), _passedTag.erc721TokenId, 0, "0x00");
+        IERC1155Upgradeable tokenERC1155 = IERC1155Upgradeable(passedTag.assetAddress);
+        tokenERC1155.safeTransferFrom(msg.sender, address(this), passedTag.erc721TokenId, 0, "0x00");
       }
-    } else if (_passedTag.tagType == TagType.WalletRestrictedFungible) {
+    } else if (passedTag.tagType == TagType.WalletRestrictedFungible) {
       // Verify that either this tag has never existed before or the supply has been completely drained
       require (isCleanTag || tags[tagHash].numClaimed >= tags[tagHash].totalSupply, 'existing fungible tag undrained');
-      require (_passedTag.fungiblePerClaim <= _passedTag.perUser, 'fungiblePerClaim > perUser');
+      require (passedTag.fungiblePerClaim <= passedTag.perUser, 'fungiblePerClaim > perUser');
 
-      tag.assetAddress = _passedTag.assetAddress;
+      tag.assetAddress = passedTag.assetAddress;
       tag.erc721TokenId = 0;
-      tag.totalSupply = _passedTag.totalSupply;
-      tag.perUser = _passedTag.perUser;
-      tag.fungiblePerClaim = _passedTag.fungiblePerClaim;
-      if (_isNotErc1155) {
-        IERC20Upgradeable token = IERC20Upgradeable(_passedTag.assetAddress);
-        token.transferFrom(msg.sender, address(this), _passedTag.totalSupply);
+      tag.totalSupply = passedTag.totalSupply;
+      tag.perUser = passedTag.perUser;
+      tag.fungiblePerClaim = passedTag.fungiblePerClaim;
+      tag.numClaimed = 0;
+      if (isNotErc1155) {
+        IERC20Upgradeable tokenERC20 = IERC20Upgradeable(passedTag.assetAddress);
+        require(tokenERC20.transferFrom(msg.sender, address(this), passedTag.totalSupply), 'ERC-20 transferFrom failed');
       } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(_passedTag.assetAddress);
-        token.safeTransferFrom(msg.sender, address(this), 0, _passedTag.totalSupply, "0x00");
+        IERC1155Upgradeable tokenERC1155Fungible = IERC1155Upgradeable(passedTag.assetAddress);
+        tokenERC1155Fungible.safeTransferFrom(msg.sender, address(this), 0, passedTag.totalSupply, "0x00");
       }
-    } else if (_passedTag.tagType == TagType.HotPotato) {
+    } else if (passedTag.tagType == TagType.HotPotato) {
       // Verify that this tag has never existed before
       require (isCleanTag, 'existing tag');
 
-      tag.assetAddress = _passedTag.assetAddress;
-      tag.erc721TokenId = _passedTag.erc721TokenId;
+      tag.assetAddress = passedTag.assetAddress;
+      tag.erc721TokenId = passedTag.erc721TokenId;
       tag.totalSupply = 1;
       tag.perUser = 0;
       tag.fungiblePerClaim = 0;
-      IERC4907Upgradeable token = IERC4907Upgradeable(_passedTag.assetAddress);
-      token.safeTransferFrom(msg.sender, address(this), _passedTag.erc721TokenId);
-    } else if (_passedTag.tagType == TagType.CandyMachineDrop) {
+      tag.numClaimed = 0;
+      IERC4907Upgradeable tokenERC4907 = IERC4907Upgradeable(passedTag.assetAddress);
+      tokenERC4907.safeTransferFrom(msg.sender, address(this), passedTag.erc721TokenId);
+    } else if (passedTag.tagType == TagType.CandyMachineDrop) {
       // Verify that this tag has never existed before
       require (isCleanTag, 'existing tag');
 
-      CandyMachineFactory candyMachineFactory = CandyMachineFactory(candyMachineFactoryAddr);
-      tag.assetAddress = candyMachineFactory.newCandyMachine(_metadataURIs, msg.sender);
       tag.erc721TokenId = 0;
-      tag.totalSupply = _metadataURIs.length;
-      tag.perUser = _passedTag.perUser;
+      tag.totalSupply = metadataURIs.length;
+      tag.perUser = passedTag.perUser;
       tag.fungiblePerClaim = 0;
+      tag.numClaimed = 0;
+      CandyMachineFactory candyMachineFactory = CandyMachineFactory(candyMachineFactoryAddr);
+      tag.assetAddress = candyMachineFactory.newCandyMachine(metadataURIs, msg.sender);
     }
-    tag.numClaimed = 0;
 
     emit TagCreationOrRefill(
       msg.sender,
@@ -259,7 +269,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.perUser,
       tag.fungiblePerClaim,
       tag.uid,
-      _isNotErc1155
+      isNotErc1155
     );
   }
 
@@ -270,76 +280,76 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
    * @returns uint256 representing the amount of the newly claimed token (if fungible)
    */
   function claimTag(
-    address _recipient,
-    uint256 _uid,
+    address recipient,
+    uint256 uid,
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Relevent when `tagType` is not HotPotato
-    bool _isNotErc1155,
+    bool isNotErc1155,
     // Indicates the new (copied) asset's token
     // NOTE: Relevent when `tagType` is LimitedOrOpenEdition; this value must not already exist in the collection.
-    uint256 _newTokenId
+    uint256 newTokenId
   ) external onlyOwner returns(address, uint256, uint256) {
-    bytes32 tagHash = hashUniqueTag(msg.sender, _uid);
+    bytes32 tagHash = hashUniqueTag(msg.sender, uid);
 
     require (tags[tagHash].totalSupply > 0, 'tag not existent or depleted');
     require (msg.sender == tags[tagHash].tagAuthority, 'signer must be tagAuthority');
 
     require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].numClaimed < tags[tagHash].totalSupply, 'not HotPotato and total drained');
-    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].claimsMade[_recipient] < tags[tagHash].perUser, 'not HotP and perUser drained');
-
-    if (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) {
-      if (_isNotErc1155) {
-        IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(tags[tagHash].assetAddress);
-        token.mintCopy(_recipient, tags[tagHash].erc721TokenId, _newTokenId);
-      } else {
-        IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(tags[tagHash].assetAddress);
-        token.mintCopy(_recipient, tags[tagHash].erc721TokenId, _newTokenId);
-      }
-    } else if (tags[tagHash].tagType == TagType.SingleUse1Of1 || tags[tagHash].tagType == TagType.Refillable1Of1) {
-      if (_isNotErc1155) {
-        IERC721Upgradeable token = IERC721Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), _recipient, tags[tagHash].erc721TokenId);
-      } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), _recipient, tags[tagHash].erc721TokenId, 0, "0x00");
-      }
-    } else if (tags[tagHash].tagType == TagType.WalletRestrictedFungible) {
-      if (_isNotErc1155) {
-        IERC20Upgradeable token = IERC20Upgradeable(tags[tagHash].assetAddress);
-        token.transfer(_recipient, tags[tagHash].fungiblePerClaim);
-      } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), _recipient, 0, tags[tagHash].fungiblePerClaim, "0x00");
-      }
-    } else if (tags[tagHash].tagType == TagType.HotPotato) {
-      IERC4907Upgradeable token = IERC4907Upgradeable(tags[tagHash].assetAddress);
-      token.setUser(tags[tagHash].erc721TokenId, _recipient, MAX_UINT64);
-    } else if (tags[tagHash].tagType == TagType.CandyMachineDrop) {
-      CandyMachine candyMachine = CandyMachine(tags[tagHash].assetAddress);
-      candyMachine.mint(_recipient);
-    }
-
-    if (tags[tagHash].tagType == TagType.WalletRestrictedFungible) {
-      tags[tagHash].numClaimed += tags[tagHash].fungiblePerClaim;
-      tags[tagHash].claimsMade[_recipient] += tags[tagHash].fungiblePerClaim;
-    } else {
-      tags[tagHash].numClaimed += 1;
-      tags[tagHash].claimsMade[_recipient] += 1;
-    }
+    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].claimsMade[recipient] < tags[tagHash].perUser, 'not HotP and perUser drained');
 
     emit TagClaim(
       msg.sender,
-      _recipient,
+      recipient,
       tags[tagHash].assetAddress,
       tags[tagHash].erc721TokenId,
       tags[tagHash].fungiblePerClaim,
       tags[tagHash].uid,
-      _isNotErc1155
+      isNotErc1155
     );
+
+    if (tags[tagHash].tagType == TagType.WalletRestrictedFungible) {
+      tags[tagHash].numClaimed += tags[tagHash].fungiblePerClaim;
+      tags[tagHash].claimsMade[recipient] += tags[tagHash].fungiblePerClaim;
+    } else {
+      tags[tagHash].numClaimed += 1;
+      tags[tagHash].claimsMade[recipient] += 1;
+    }
+
+    if (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) {
+      if (isNotErc1155) {
+        IERC721CopyableUpgradeable tokenERC721Copyable = IERC721CopyableUpgradeable(tags[tagHash].assetAddress);
+        tokenERC721Copyable.mintCopy(recipient, tags[tagHash].erc721TokenId, newTokenId);
+      } else {
+        IERC1155CopyableUpgradeable tokenERC1155Copyable = IERC1155CopyableUpgradeable(tags[tagHash].assetAddress);
+        tokenERC1155Copyable.mintCopy(recipient, tags[tagHash].erc721TokenId, newTokenId);
+      }
+    } else if (tags[tagHash].tagType == TagType.SingleUse1Of1 || tags[tagHash].tagType == TagType.Refillable1Of1) {
+      if (isNotErc1155) {
+        IERC721Upgradeable tokenERC721 = IERC721Upgradeable(tags[tagHash].assetAddress);
+        tokenERC721.safeTransferFrom(address(this), recipient, tags[tagHash].erc721TokenId);
+      } else {
+        IERC1155Upgradeable tokenERC1155 = IERC1155Upgradeable(tags[tagHash].assetAddress);
+        tokenERC1155.safeTransferFrom(address(this), recipient, tags[tagHash].erc721TokenId, 0, "0x00");
+      }
+    } else if (tags[tagHash].tagType == TagType.WalletRestrictedFungible) {
+      if (isNotErc1155) {
+        IERC20Upgradeable tokenERC20 = IERC20Upgradeable(tags[tagHash].assetAddress);
+        require(tokenERC20.transfer(recipient, tags[tagHash].fungiblePerClaim), 'ERC-20 transfer failed');
+      } else {
+        IERC1155Upgradeable tokenERC1155Fungible = IERC1155Upgradeable(tags[tagHash].assetAddress);
+        tokenERC1155Fungible.safeTransferFrom(address(this), recipient, 0, tags[tagHash].fungiblePerClaim, "0x00");
+      }
+    } else if (tags[tagHash].tagType == TagType.HotPotato) {
+      IERC4907Upgradeable tokenERC4907 = IERC4907Upgradeable(tags[tagHash].assetAddress);
+      tokenERC4907.setUser(tags[tagHash].erc721TokenId, recipient, MAX_UINT64);
+    } else if (tags[tagHash].tagType == TagType.CandyMachineDrop) {
+      CandyMachine candyMachine = CandyMachine(tags[tagHash].assetAddress);
+      candyMachine.mint(recipient);
+    }
 
     return (
       tags[tagHash].assetAddress,
-      (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) ? _newTokenId : tags[tagHash].erc721TokenId,
+      (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) ? newTokenId : tags[tagHash].erc721TokenId,
       tags[tagHash].fungiblePerClaim
     );
   }
@@ -348,59 +358,65 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
    * @notice Cancel and empty a specified tag
    */
   function cancelAndEmpty(
-    uint256 _uid,
+    uint256 uid,
     // Indicates if the claimable asset is an NFT that does not support the ERC-1155 standard
     // NOTE: Relevent when `tagType` is not HotPotato
-    bool _isNotErc1155
+    bool isNotErc1155
   ) external onlyOwner {
-    bytes32 tagHash = hashUniqueTag(msg.sender, _uid);
+    bytes32 tagHash = hashUniqueTag(msg.sender, uid);
 
     require (tags[tagHash].totalSupply > 0, 'tag not existent or depleted');
     require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].numClaimed < tags[tagHash].totalSupply, 'not HotPotato and total drained');
 
-    if (tags[tagHash].tagType == TagType.LimitedOrOpenEdition) {
-      if (_isNotErc1155) {
-        IERC721CopyableUpgradeable token = IERC721CopyableUpgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), msg.sender, tags[tagHash].erc721TokenId);
-      } else {
-        IERC1155CopyableUpgradeable token = IERC1155CopyableUpgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), msg.sender, tags[tagHash].erc721TokenId, 0, "0x00");
-      }
-    } else if (tags[tagHash].tagType == TagType.SingleUse1Of1 || tags[tagHash].tagType == TagType.Refillable1Of1) {
-      require(tags[tagHash].numClaimed == 0, 'tag already claimed');
-      if (_isNotErc1155) {
-        IERC721Upgradeable token = IERC721Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), msg.sender, tags[tagHash].erc721TokenId);
-      } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), msg.sender, tags[tagHash].erc721TokenId, 0, "0x00");
-      }
-    } else if (tags[tagHash].tagType == TagType.WalletRestrictedFungible) {
-      require(tags[tagHash].totalSupply - tags[tagHash].numClaimed > 0, 'tag totally depleted');
-      if (_isNotErc1155) {
-        IERC20Upgradeable token = IERC20Upgradeable(tags[tagHash].assetAddress);
-        token.transfer(msg.sender, tags[tagHash].totalSupply - tags[tagHash].numClaimed);
-      } else {
-        IERC1155Upgradeable token = IERC1155Upgradeable(tags[tagHash].assetAddress);
-        token.safeTransferFrom(address(this), msg.sender, 0, tags[tagHash].totalSupply - tags[tagHash].numClaimed, "0x00");
-      }
-    } else if (tags[tagHash].tagType == TagType.HotPotato) {
-      IERC4907Upgradeable token = IERC4907Upgradeable(tags[tagHash].assetAddress);
-      require(token.userOf(tags[tagHash].erc721TokenId) == msg.sender, 'bakery must be current renter');
-      token.safeTransferFrom(address(this), msg.sender, tags[tagHash].erc721TokenId);
-    } else if (tags[tagHash].tagType == TagType.CandyMachineDrop) {
-      CandyMachine candyMachine = CandyMachine(tags[tagHash].assetAddress);
-      candyMachine.cancel();
-    }
+    TagType tagType = tags[tagHash].tagType;
+    address assetAddress = tags[tagHash].assetAddress;
+    uint256 erc721TokenId = tags[tagHash].erc721TokenId;
+    uint256 numClaimed = tags[tagHash].numClaimed;
+    uint256 totalSupply = tags[tagHash].totalSupply;
 
     emit Cancellation(
       msg.sender,
-      _uid,
-      _isNotErc1155,
-      tags[tagHash].numClaimed
+      uid,
+      isNotErc1155,
+      numClaimed
     );
 
     // Default everything
     delete tags[tagHash];
+
+    if (tagType == TagType.LimitedOrOpenEdition) {
+      if (isNotErc1155) {
+        IERC721CopyableUpgradeable tokenERC721Copyable = IERC721CopyableUpgradeable(assetAddress);
+        tokenERC721Copyable.safeTransferFrom(address(this), msg.sender, erc721TokenId);
+      } else {
+        IERC1155CopyableUpgradeable tokenERC1155Copyable = IERC1155CopyableUpgradeable(assetAddress);
+        tokenERC1155Copyable.safeTransferFrom(address(this), msg.sender, erc721TokenId, 0, "0x00");
+      }
+    } else if (tagType == TagType.SingleUse1Of1 || tagType == TagType.Refillable1Of1) {
+      require(numClaimed == 0, 'tag already claimed');
+      if (isNotErc1155) {
+        IERC721Upgradeable tokenERC721 = IERC721Upgradeable(assetAddress);
+        tokenERC721.safeTransferFrom(address(this), msg.sender, erc721TokenId);
+      } else {
+        IERC1155Upgradeable tokenERC1155 = IERC1155Upgradeable(assetAddress);
+        tokenERC1155.safeTransferFrom(address(this), msg.sender, erc721TokenId, 0, "0x00");
+      }
+    } else if (tagType == TagType.WalletRestrictedFungible) {
+      require(totalSupply - numClaimed > 0, 'tag totally depleted');
+      if (isNotErc1155) {
+        IERC20Upgradeable tokenERC20 = IERC20Upgradeable(assetAddress);
+        require(tokenERC20.transfer(msg.sender, totalSupply - numClaimed), 'ERC-20 transfer failed');
+      } else {
+        IERC1155Upgradeable tokenERC1155Fungible = IERC1155Upgradeable(assetAddress);
+        tokenERC1155Fungible.safeTransferFrom(address(this), msg.sender, 0, totalSupply - numClaimed, "0x00");
+      }
+    } else if (tagType == TagType.HotPotato) {
+      IERC4907Upgradeable tokenERC4907 = IERC4907Upgradeable(assetAddress);
+      require(tokenERC4907.userOf(erc721TokenId) == msg.sender, 'bakery must be current renter');
+      tokenERC4907.safeTransferFrom(address(this), msg.sender, erc721TokenId);
+    } else if (tagType == TagType.CandyMachineDrop) {
+      CandyMachine candyMachine = CandyMachine(assetAddress);
+      candyMachine.cancel();
+    }
   }
 }

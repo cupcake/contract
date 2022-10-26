@@ -5,7 +5,7 @@
  * From: https://github.com/sidarth16/Rentable-NFTs/blob/main/contracts/RentableNft.sol
  */
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
@@ -25,7 +25,7 @@ contract ExampleERC4907 is ERC721Upgradeable, IERC4907Upgradeable {
 
   mapping (uint256  => UserInfo) private _users;
 
-  function initialize() public initializer {
+  function initialize() external initializer {
     __ERC721_init("TestRentableNFT","TRN");
   }
   
@@ -34,7 +34,7 @@ contract ExampleERC4907 is ERC721Upgradeable, IERC4907Upgradeable {
   /// Throws if `tokenId` is not valid NFT
   /// @param user  The new user of the NFT
   /// @param expires  UNIX timestamp, The new user could use the NFT before expires
-  function setUser(uint256 tokenId, address user, uint64 expires) public override virtual{
+  function setUser(uint256 tokenId, address user, uint64 expires) external override virtual{
     require(_isApprovedOrOwner(msg.sender, tokenId),"ERC721Upgradeable: transfer caller is not owner nor approved");
     // require(userOf(tokenId)==address(0),"User already assigned");
     require(expires > block.timestamp, "expires should be in future");
@@ -59,7 +59,7 @@ contract ExampleERC4907 is ERC721Upgradeable, IERC4907Upgradeable {
   /// @dev The zero value indicates that there is no user 
   /// @param tokenId The NFT to get the user expires for
   /// @return The user expires for this NFT
-  function userExpires(uint256 tokenId) public view override virtual returns(uint256){
+  function userExpires(uint256 tokenId) external view override virtual returns(uint256){
     return _users[tokenId].expires;
   }
 
@@ -68,7 +68,7 @@ contract ExampleERC4907 is ERC721Upgradeable, IERC4907Upgradeable {
     return interfaceId == type(IERC4907Upgradeable).interfaceId || super.supportsInterface(interfaceId);
   }
 
-  function nftMint() public returns (uint256){
+  function nftMint() external returns (uint256){
     _tokenIdCounter.increment();
     uint256 tokenId = _tokenIdCounter.current();
     _safeMint(msg.sender, tokenId);
