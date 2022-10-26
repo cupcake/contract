@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155URIStorageUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
@@ -11,6 +11,8 @@ import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
  */
 contract CandyMachineStorage {
   using SafeMathUpgradeable for uint256;
+
+  event Cancellation();  
 
   uint256 numURIsExisting;
   uint256 nonce;
@@ -28,17 +30,18 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
   /*
    * Initalizes the state variables.
    */
-  function initialize(string[] calldata _metadataURIs, address _owner) public onlyInitializing {
+  function initialize(string[] calldata metadataURIs, address ownerArg) external onlyInitializing {
     __ERC1155URIStorage_init_unchained();
-    require(_metadataURIs.length > 0, 'empty _metadataURIs passed');
+    require(metadataURIs.length > 0, 'empty metadataURIs passed');
+    require(ownerArg != address(0), 'owner cannot be zero-address');
 
-    for (uint256 i = 0; i < _metadataURIs.length; i++) {
-      _setURI(i, _metadataURIs[i]);
+    for (uint256 i = 0; i < metadataURIs.length; i++) {
+      _setURI(i, metadataURIs[i]);
     }
 
-    numURIsExisting = _metadataURIs.length;
+    numURIsExisting = metadataURIs.length;
     nonce = 0;
-    owner = _owner;
+    owner = ownerArg;
   }
 
   /*
@@ -55,12 +58,12 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
 
   /*
    * @notice Generates a pseudo-random number between 0 and the numURIsExisting state variable.
+   * @param nonceArg the nonce we use to generate the random number. NOTE: we pass in this variable instead of
+   *               reading it from the state to avoid costly operations inside a loop that might waste gas.
    * @returns uint256 the pseudo-randmly generated number.
    */
-  function _randomNumber() internal onlyOwner returns(uint256) {
-    uint256 randNum = uint(keccak256(abi.encodePacked(block.timestamp, msg.sender, nonce))) % numURIsExisting;
-    nonce++;
-    return randNum;
+  function _randomNumber(uint256 nonceArg) internal view onlyOwner returns(uint256) {
+    return uint(keccak256(abi.encodePacked(block.timestamp, msg.sender, nonceArg))) % numURIsExisting;
   }
 
   /*
@@ -74,27 +77,29 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
    * @notice Mint an ERC-1155 asset with a pseudo-randomly selected metadata URI.
    * @dev Emits a {TransferSingle} event.
    */
-  function mint(address _recipient) external onlyOwner {
+  function mint(address recipient) external onlyOwner {
     require(!isFinished(), 'CandyMachine cancelled');
-    uint256 randomNum = _randomNumber();
+    uint256 randomNum = _randomNumber(nonce);
     uint256 i = 0;
     while (mintedTokenIds[randomNum] && i < numURIsExisting) {
-      randomNum = _randomNumber();
+      randomNum = _randomNumber(nonce + i);
       i++;
     }
+    nonce += i;
     if(!mintedTokenIds[randomNum]) {
       numURIsExisting = 0;
       revert('CandyMachine depleted');
     }
-
-    _mint(_recipient, randomNum, 1, "0x00");
     mintedTokenIds[randomNum] = true;
+    _mint(recipient, randomNum, 1, "0x00");
   }
 
   /*
    * @notice Cancel the CandyMachine. This means that no further NFTs can be minted.
    */
   function cancel() external onlyOwner {
+    emit Cancellation();
+
     for (uint256 i = 0; i < numURIsExisting; i++) {
       if (!mintedTokenIds[i]) {
         _setURI(i, "");

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/IERC1155MetadataURIUpgradeable.sol";
 
@@ -14,5 +14,5 @@ interface IERC1155CopyableUpgradeable is IERC1155MetadataURIUpgradeable {
     // @param _tokenIdMaster A token ID that we would like to duplicate the metadata of
     // @param _tokenIdCopy A token ID that we would like to duplicate the metadata to
     // @return uint256 representing the token ID of the newly minted NFT (via this duplication process)
-    function mintCopy(address _to, uint256 _tokenIdMaster, uint256 _tokenIdCopy) external;
+    function mintCopy(address to, uint256 tokenIdMaster, uint256 tokenIdCopy) external;
 }
