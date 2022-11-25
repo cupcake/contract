@@ -1,6 +1,6 @@
 # 🧁 Cupcake
 
-NPM module is "cupcake-cli", represents what is in the CLI folder
+Cupcake provides six unique asset distribution schemes for making both non-fungible and fungible assets claimable via physical NFC tags.
 
 ## Ethereum Contract Architecture
 
