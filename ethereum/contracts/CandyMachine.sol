@@ -30,7 +30,7 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
   /*
    * Initalizes the state variables.
    */
-  function initialize(string[] calldata metadataURIs, address ownerArg) external onlyInitializing {
+  function initialize(string[] calldata metadataURIs, address ownerArg) external initializer {
     __ERC1155URIStorage_init_unchained();
     require(metadataURIs.length > 0, 'empty metadataURIs passed');
     require(ownerArg != address(0), 'owner cannot be zero-address');
@@ -86,7 +86,7 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
       i++;
     }
     nonce += i;
-    if(!mintedTokenIds[randomNum]) {
+    if(mintedTokenIds[randomNum]) {
       numURIsExisting = 0;
       revert('CandyMachine depleted');
     }

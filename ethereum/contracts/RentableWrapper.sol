@@ -126,6 +126,12 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
 
     delete tokens[wrappedTokenId];
 
+    safeTransferFrom(
+      msg.sender,
+      address(this),
+      wrappedTokenId
+    );
+
     asset.safeTransferFrom(
       address(this),
       msg.sender,

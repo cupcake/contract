@@ -22,4 +22,8 @@ contract ExampleERC1155Copyable is ERC1155URIStorageUpgradeable, IERC1155Copyabl
     _mint(to, tokenIdCopy, 1, "0x00");
     _setURI(tokenIdCopy, uri(tokenIdMaster));
   }
+
+  function mint(address to, uint256 tokenId) external {
+    _mint(to, tokenId, 1, "0x00");
+  }
 }
