@@ -37,10 +37,10 @@ contract CandyMachineFactory is ICandyMachineFactory, Initializable, UUPSUpgrade
    * @notice Creates a new CandyMachine contract.
    * @dev Initalizes the new CandyMachine using the passed arguments and emits a {Creation} event.
    */
-  function newCandyMachine(string[] calldata metadataURIs, address ownerCM) external override returns(address) {
+  function newCandyMachine(string[] calldata metadataURIs) external override returns(address) {
     CandyMachine candyMachine = new CandyMachine();
     emit Creation(address(candyMachine));
-    candyMachine.initialize(metadataURIs, ownerCM);
+    candyMachine.initialize(metadataURIs, msg.sender);
     return address(candyMachine);
   }
 }

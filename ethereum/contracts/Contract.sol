@@ -168,10 +168,11 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     // NOTE: Relevent when `tagType` is CandyMachineDrop
     string[] calldata metadataURIs
   ) external onlyOwner {
+
     // The following checks are only required when the tagType is not HotPotato, SingleUse1Of1, Refillable1Of1
-    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.totalSupply > 0, 'zero totalSupply');
+    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.tagType == TagType.CandyMachineDrop || passedTag.totalSupply > 0, 'zero totalSupply');
     require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.perUser > 0, 'zero perUser');
-    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.perUser <= passedTag.totalSupply, 'perUser > totalSupply');
+    require (passedTag.tagType == TagType.HotPotato || passedTag.tagType == TagType.SingleUse1Of1 || passedTag.tagType == TagType.Refillable1Of1 || passedTag.perUser <= passedTag.totalSupply || (passedTag.tagType == TagType.CandyMachineDrop && passedTag.perUser <= metadataURIs.length), 'perUser > totalSupply');
 
     bytes32 tagHash = hashUniqueTag(msg.sender, passedTag.uid);
 
@@ -256,7 +257,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.fungiblePerClaim = 0;
       tag.numClaimed = 0;
       CandyMachineFactory candyMachineFactory = CandyMachineFactory(candyMachineFactoryAddr);
-      tag.assetAddress = candyMachineFactory.newCandyMachine(metadataURIs, msg.sender);
+      tag.assetAddress = candyMachineFactory.newCandyMachine(metadataURIs);
     }
 
     emit TagCreationOrRefill(
@@ -294,8 +295,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     require (tags[tagHash].totalSupply > 0, 'tag not existent or depleted');
     require (msg.sender == tags[tagHash].tagAuthority, 'signer must be tagAuthority');
 
-    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].numClaimed < tags[tagHash].totalSupply, 'not HotPotato and total drained');
-    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].claimsMade[recipient] < tags[tagHash].perUser, 'not HotP and perUser drained');
+    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].tagType == TagType.Refillable1Of1 || tags[tagHash].numClaimed < tags[tagHash].totalSupply, 'not HotP or ReF and tot drained');
+    require (tags[tagHash].tagType == TagType.HotPotato || tags[tagHash].tagType == TagType.Refillable1Of1 || tags[tagHash].claimsMade[recipient] < tags[tagHash].perUser, 'not HotP or ReF and pU drained');
 
     emit TagClaim(
       msg.sender,
