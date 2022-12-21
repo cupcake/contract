@@ -75,7 +75,6 @@ contract ExampleERC4907 is ERC721Upgradeable, IERC4907Upgradeable {
     return tokenId;
   }
 
-
   function _beforeTokenTransfer(
     address from,
     address to,

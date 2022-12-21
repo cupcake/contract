@@ -25,4 +25,8 @@ contract ExampleERC721Copyable is ERC721URIStorageUpgradeable, IERC721CopyableUp
   function mint(address to, uint256 tokenId) external {
     _safeMint(to, tokenId);
   }
+
+  function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721Upgradeable, IERC165Upgradeable) returns (bool) {
+    return interfaceId == type(IERC721CopyableUpgradeable).interfaceId || super.supportsInterface(interfaceId);
+  }
 }

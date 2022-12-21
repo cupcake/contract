@@ -1,4 +1,4 @@
-// require("@nomiclabs/hardhat-waffle");
+require("@nomicfoundation/hardhat-chai-matchers");
 require("@nomiclabs/hardhat-ethers");
 require("@openzeppelin/hardhat-upgrades");
 require("@nomiclabs/hardhat-etherscan");
@@ -9,7 +9,7 @@ module.exports = {
   networks: {
   	goerli: {
   		url: `https://goerli.infura.io/v3/${process.env.INFURA_API_KEY}`,
-  		accounts: [process.env.PRI_KEY],
+  		accounts: [process.env.PRI_KEY, process.env.PRI_KEY_2],
   	},
   },
   etherscan: {

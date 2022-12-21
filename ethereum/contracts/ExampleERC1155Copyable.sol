@@ -26,4 +26,8 @@ contract ExampleERC1155Copyable is ERC1155URIStorageUpgradeable, IERC1155Copyabl
   function mint(address to, uint256 tokenId) external {
     _mint(to, tokenId, 1, "0x00");
   }
+
+  function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155Upgradeable, IERC165Upgradeable) returns (bool) {
+    return interfaceId == type(IERC1155CopyableUpgradeable).interfaceId || super.supportsInterface(interfaceId);
+  }
 }

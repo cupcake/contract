@@ -8,7 +8,6 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgra
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
 
 import "../interfaces/IERC4907Upgradeable.sol";
 
@@ -18,7 +17,6 @@ import "../interfaces/IERC4907Upgradeable.sol";
  * and that RentableWrapper has the ability to change the list of contracts it inherits from in the future via upgradeability.
  */
 contract RentableWrapperStorage {
-  using SafeMathUpgradeable for uint256;
   using CountersUpgradeable for CountersUpgradeable.Counter;
 
   /// @notice This emits when an underlying NFT is wrapped.
@@ -50,7 +48,6 @@ contract RentableWrapperStorage {
 }
 
 contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907Upgradeable, ERC721HolderUpgradeable, UUPSUpgradeable, OwnableUpgradeable {
-  using SafeMathUpgradeable for uint256;
   using CountersUpgradeable for CountersUpgradeable.Counter;
 
   /// @custom:oz-upgrades-unsafe-allow constructor
@@ -78,6 +75,7 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
   function wrap(IERC721MetadataUpgradeable asset, uint256 underlyingTokenId) external returns(uint256 newTokenId) {
     require(asset.ownerOf(underlyingTokenId) == msg.sender, 'asset not owned by msg.sender');
     require(asset.getApproved(underlyingTokenId) == address(this), 'asset not approved');
+    require(address(asset) != address(this), 'recursive wrapping not allowed');
 
     Token storage token = tokens[tokenIdCounter.current()];
     token.asset = asset;
@@ -142,7 +140,7 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
   }
 
   function isWrapped(uint256 wrappedTokenId) public view returns(bool) {
-    return address(tokens[wrappedTokenId].asset) == address(0);
+    return address(tokens[wrappedTokenId].asset) != address(0);
   }
 
   /**
@@ -172,7 +170,6 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
     token.expires = expires;
     emit UpdateUser(tokenId, user, expires);
   }
-
   /**
    * @notice Get the user address of an NFT
    * @dev The zero address indicates that there is no user or the user is expired
@@ -180,7 +177,7 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
    * @return The user address for this NFT
    */
   function userOf(uint256 tokenId) public view override virtual returns(address) {
-    if(uint256(tokens[tokenId].expires) >= block.timestamp){
+    if(tokens[tokenId].expires >= block.timestamp){
       return tokens[tokenId].user;
     }
     return address(0);
@@ -209,13 +206,15 @@ contract RentableWrapper is RentableWrapperStorage, ERC721Upgradeable, IERC4907U
     uint256 tokenId
   ) internal virtual override {
     super._beforeTokenTransfer(from, to, tokenId);
+    require(userOf(tokenId) == address(0) || userOf(tokenId) == ownerOf(tokenId), 'trnsfrs when user is owner or 0x');
 
     if (
       from != to &&
-      tokens[tokenId].user != address(0) &&       //user present
-      block.timestamp >= tokens[tokenId].expires  //user expired
+      tokens[tokenId].user != address(0) &&
+      block.timestamp >= tokens[tokenId].expires
     ) {
-      delete tokens[tokenId];
+      delete tokens[tokenId].user;
+      delete tokens[tokenId].expires;
       emit UpdateUser(tokenId, address(0), 0);
     }
   }
