@@ -1,47 +1,52 @@
 //SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.7;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155URIStorageUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155URIStorage.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 
-/*
- * The CandyMachineStorage contract contains all of the Contract's state variables which are then inherited by Contract.
- * Via this seperation of storage and logic we ensure that Contract's state variables come first in the storage layout
- * and that Contract has the ability to change the list of contracts it inherits from in the future via upgradeability.
- */
-contract CandyMachineStorage {
-  using SafeMathUpgradeable for uint256;
+contract CandyMachine is ERC1155URIStorage, VRFConsumerBaseV2 {
 
-  event Cancellation();  
+  event RandomWordsRequested(uint256 indexed requestId);
+  event RandomWordsFulfilled(uint256 indexed requestId, uint256 outputWord);
+  event Cancellation();
 
-  uint256 numURIsExisting;
-  uint256 nonce;
-  address owner;
+  uint256 internal numURIsExisting;
+  uint256 internal nonce;
+  uint256 internal numMintsInProcess;
+  address internal owner;
 
-  mapping(uint256 => bool) public mintedTokenIds;
-}
+  mapping(uint256 => address) public requests;
 
-contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
-  using SafeMathUpgradeable for uint256;
+
+  uint32 constant callbackGasLimit = 300000;
+  uint16 constant requestConfirmations = 3;
+  uint32 constant numWords = 1;
+  VRFCoordinatorV2Interface COORDINATOR;
+  uint64 subscriptionId;
 
   ////////////////////////////////////////////////
-  //////// I N I T I A L I Z E R
+  //////// C O N S T R U C T O R
 
   /*
    * Initalizes the state variables.
    */
-  function initialize(string[] calldata metadataURIs, address ownerArg) external initializer {
-    __ERC1155URIStorage_init_unchained();
-    require(metadataURIs.length > 0, 'empty metadataURIs passed');
-    require(ownerArg != address(0), 'owner cannot be zero-address');
+  constructor(string[] memory metadataURIs, address ownerArg, uint64 subscriptionIdArg, address vrfConsumerBaseV2)
+    ERC1155('')
+    VRFConsumerBaseV2(vrfConsumerBaseV2)
+  {
+    require(metadataURIs.length > 0 && ownerArg != address(0), 'empty metadataURIs or zero owner');
 
     for (uint256 i = 0; i < metadataURIs.length; i++) {
       _setURI(i, metadataURIs[i]);
     }
-
     numURIsExisting = metadataURIs.length;
-    nonce = 0;
     owner = ownerArg;
+    COORDINATOR = VRFCoordinatorV2Interface(
+      vrfConsumerBaseV2
+    );
+    subscriptionId = subscriptionIdArg;
   }
 
   /*
@@ -57,54 +62,62 @@ contract CandyMachine is CandyMachineStorage, ERC1155URIStorageUpgradeable {
   //////// F U N C T I O N S
 
   /*
-   * @notice Generates a pseudo-random number between 0 and the numURIsExisting state variable.
-   * @param nonceArg the nonce we use to generate the random number. NOTE: we pass in this variable instead of
-   *               reading it from the state to avoid costly operations inside a loop that might waste gas.
-   * @returns uint256 the pseudo-randmly generated number.
+   * @notice Begin process of minting an ERC-1155 asset by requesting a random number from Chainlink.
+   * @dev Emits a {RandomWordsRequested} event.
    */
-  function _randomNumber(uint256 nonceArg) internal view onlyOwner returns(uint256) {
-    return uint(keccak256(abi.encodePacked(block.timestamp, msg.sender, nonceArg))) % numURIsExisting;
+  function mint(address recipient, bytes32 keyHash)
+    external
+    onlyOwner
+    returns (uint256 requestId)
+  {
+    require((nonce + numMintsInProcess) < numURIsExisting, "CandyMachine empty");
+    // Will revert if subscription is not set and funded.
+    requestId = COORDINATOR.requestRandomWords(
+        keyHash,
+        subscriptionId,
+        requestConfirmations,
+        callbackGasLimit,
+        numWords
+    );
+    emit RandomWordsRequested(requestId);
+    numMintsInProcess += 1;
+    requests[requestId] = recipient;
+    return requestId;
   }
 
   /*
-   * @notice Check if the CandyMachine has been cancelled or is depleted.
+   * @notice Receives the requested random number and mints an ERC-1155 asset using the randomness.
+   * @dev Emits a {RandomWordsFulfilled} event and a {TransferSingle} event.
    */
-  function isFinished() view public returns(bool) {
-    return (numURIsExisting == 0);
-  }
+  function fulfillRandomWords(
+    uint256 _requestId,
+    uint256[] memory _randomWords
+  ) internal override {
+    require(requests[_requestId] != address(0) && nonce < numURIsExisting, "no request or CM empty");
 
-  /*
-   * @notice Mint an ERC-1155 asset with a pseudo-randomly selected metadata URI.
-   * @dev Emits a {TransferSingle} event.
-   */
-  function mint(address recipient) external onlyOwner {
-    require(!isFinished(), 'CandyMachine cancelled');
-    uint256 randomNum = _randomNumber(nonce);
-    uint256 i = 0;
-    while (mintedTokenIds[randomNum] && i < numURIsExisting) {
-      randomNum = _randomNumber(nonce + i);
-      i++;
-    }
-    nonce += i;
-    if(mintedTokenIds[randomNum]) {
-      numURIsExisting = 0;
-      revert('CandyMachine depleted');
-    }
-    mintedTokenIds[randomNum] = true;
-    _mint(recipient, randomNum, 1, "0x00");
+    uint256 randomNum = _randomWords[0] % (numURIsExisting - nonce);
+
+    emit RandomWordsFulfilled(_requestId, randomNum);
+
+    string memory temp = uri(nonce + randomNum);
+    _setURI(nonce + randomNum, uri(nonce));
+    _setURI(nonce, temp);
+
+    _mint(requests[_requestId], nonce, 1, "0x00");
+
+    nonce += 1;
+    numMintsInProcess -= 1;
   }
 
   /*
    * @notice Cancel the CandyMachine. This means that no further NFTs can be minted.
+   * @dev Emits a {Cancellation} event.
    */
   function cancel() external onlyOwner {
     emit Cancellation();
-
-    for (uint256 i = 0; i < numURIsExisting; i++) {
-      if (!mintedTokenIds[i]) {
-        _setURI(i, "");
-      }
+    for (uint256 i = nonce; i < numURIsExisting; i++) {
+      _setURI(i, "");
     }
-    numURIsExisting = 0;
+    nonce = numURIsExisting;
   }
 }
