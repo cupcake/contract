@@ -6,6 +6,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/IERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 
@@ -128,6 +129,7 @@ contract ContractStorage {
 }
 
 contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC721HolderUpgradeable, ERC1155HolderUpgradeable {
+  using SafeERC20Upgradeable for IERC20Upgradeable;
 
   ////////////////////////////////////////////////
   //////// I N I T I A L I Z E R
@@ -209,10 +211,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.numClaimed = 0;
     } else if (passedTag.tagType == TagType.WalletRestrictedFungible) {
       // Verify that either this tag has never existed before or the supply has been completely drained
-      require (isCleanTag || tag.numClaimed >= tag.totalSupply, 'existing fungible tag undrained');
-      require (passedTag.fungiblePerClaim <= passedTag.perUser, 'fungiblePerClaim > perUser');
-      require (passedTag.totalSupply > 0, 'totalSupply must be non-zero');
-      require (passedTag.fungiblePerClaim > 0, 'fungiblePerClaim must not be 0');
+      require ((isCleanTag || tag.numClaimed >= tag.totalSupply) && (passedTag.fungiblePerClaim <= passedTag.perUser), 'f-tag undrned or funPerClm>pUser');
+      require (passedTag.totalSupply > 0 && passedTag.fungiblePerClaim > 0, 'tSup and funPerClm must be non-0');
 
       tag.assetAddress = passedTag.assetAddress;
       tag.erc721TokenId = passedTag.erc721TokenId;
@@ -221,8 +221,8 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
       tag.fungiblePerClaim = passedTag.fungiblePerClaim;
       tag.numClaimed = 0;
       if (isNotErc1155) {
-        IERC20Upgradeable tokenERC20 = IERC20Upgradeable(passedTag.assetAddress);
-        require(tokenERC20.transferFrom(msg.sender, address(this), passedTag.totalSupply), 'ERC-20 transferFrom failed');
+        IERC20Upgradeable tokenERC20 = IERC20Upgradeable(passedTag.assetAddress);        
+        tokenERC20.safeTransferFrom(msg.sender, address(this), passedTag.totalSupply);
       }
     } else if (passedTag.tagType == TagType.HotPotato) {
       // Verify that this tag has never existed before
@@ -315,8 +315,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
 
     Tag storage tag = tags[tagHash];
 
-    require (tag.totalSupply > 0, 'tag not existent or depleted');
-    require (msg.sender == tag.tagAuthority, 'signer must be tagAuthority');
+    require (tag.totalSupply > 0 && msg.sender == tag.tagAuthority, 'non-exist or signer not tagAuth');
 
     ClaimMade storage claimMade = tag.claimsMade[recipient];
 
@@ -362,7 +361,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     } else if (tag.tagType == TagType.WalletRestrictedFungible) {
       if (isNotErc1155) {
         IERC20Upgradeable tokenERC20 = IERC20Upgradeable(tag.assetAddress);
-        require(tokenERC20.transfer(recipient, tag.fungiblePerClaim), 'ERC-20 transfer failed');
+        tokenERC20.safeTransfer(recipient, tag.fungiblePerClaim);
       } else {
         IERC1155Upgradeable tokenERC1155Fungible = IERC1155Upgradeable(tag.assetAddress);
         tokenERC1155Fungible.safeTransferFrom(address(this), recipient, tag.erc721TokenId, tag.fungiblePerClaim, "0x00");
@@ -395,8 +394,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
 
     Tag storage tag = tags[tagHash];
 
-    require (tag.totalSupply > 0, 'tag not existent or depleted');
-    require (tag.tagType == TagType.LimitedOrOpenEdition || tag.tagType == TagType.HotPotato || tag.numClaimed < tag.totalSupply, 'not HotPotato and total drained');
+    require (tag.totalSupply > 0 && (tag.tagType == TagType.LimitedOrOpenEdition || tag.tagType == TagType.HotPotato || tag.numClaimed < tag.totalSupply), 'no-exists or no HP/LOOE and dpld');
 
     TagType tagType = tag.tagType;
     address assetAddress = tag.assetAddress;
@@ -434,7 +432,7 @@ contract Contract is ContractStorage, UUPSUpgradeable, OwnableUpgradeable, ERC72
     } else if (tagType == TagType.WalletRestrictedFungible) {
       if (isNotErc1155) {
         IERC20Upgradeable tokenERC20 = IERC20Upgradeable(assetAddress);
-        require(tokenERC20.transfer(msg.sender, totalSupply - numClaimed), 'ERC-20 transfer failed');
+        tokenERC20.safeTransfer(msg.sender, totalSupply - numClaimed);
       } else {
         IERC1155Upgradeable tokenERC1155Fungible = IERC1155Upgradeable(assetAddress);
         tokenERC1155Fungible.safeTransferFrom(address(this), msg.sender, tag.erc721TokenId, totalSupply - numClaimed, "0x00");

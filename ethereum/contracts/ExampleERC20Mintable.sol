@@ -8,8 +8,10 @@
 pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 contract ExampleERC20Mintable is ERC20Upgradeable {
+  using SafeERC20Upgradeable for IERC20Upgradeable;
 
   function initialize(string memory name_, string memory symbol_) external initializer {
     __ERC20_init(name_, symbol_);
