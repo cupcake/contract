@@ -8,7 +8,10 @@ pub struct UserInfo {
     pub bump: u8
 }
 
-pub const USER_INFO_SIZE: usize = 
-  8 +   /// Anchor discriminator
-  8 +   /// Current number of claims counter
-  1;    /// PDA bump
+impl UserInfo {
+  pub const ACCOUNT_SIZE: usize = 
+    8 +   /// Anchor discriminator
+    8 +   /// Current number of claims counter
+    1;    /// PDA bump
+
+}

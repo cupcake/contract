@@ -1,39 +1,37 @@
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
-pub enum TagType {
+pub enum SprinkleType {
     /// Print new NFT Editions from a delegated Master Edition
-    LimitedOrOpenEdition,
+    EditionPrinter,
 
     /// Transfer a single NFT, then remain immutable forever
-    SingleUse1Of1,
+    UniqueImmutable,
 
     /// Mint from a Candy Machine by proxy for users
-    ///   - Pays minting costs if needed
-    ///   - Provides whitelist tokens if needed
     CandyMachineDrop,
 
     /// Transfer a single NFT, optionally refill it with a new one and repeat
-    Refillable1Of1,
+    UniqueMutable,
 
     /// Transfer any number of fungible tokens for each claim
-    WalletRestrictedFungible,
+    FungibleTransfer,
 
     /// Transfer a single frozen NFT to the most recent claimer, infinitely
     HotPotato,
 }
 
 #[account]
-pub struct Tag {
+pub struct Sprinkle {
     /// The unique identifier for this Sprinkle
     pub uid: u64,
 
     /// The distribution method type for this Sprinkle
-    pub tag_type: TagType,
+    pub sprinkle_type: SprinkleType,
 
     /// The authority account for this Sprinkle, must be present as a signer for all claims
-    pub tag_authority: Pubkey,
+    pub sprinkle_authority: Pubkey,
 
     /// The PDA address of the Bakery which created this Sprinkle
-    pub config: Pubkey,
+    pub bakery: Pubkey,
 
     /// The total number of claims this Sprinkle will allow
     ///   - If the Sprinkle is a SingleUseUnique or RefillableUnique type, this will always be 1
@@ -44,7 +42,7 @@ pub struct Tag {
     /// The current number of claims preformed on this Sprinkle
     pub num_claimed: u64,
 
-    /// If true, users claiming from this Sprinkle will be required to cover the txn network fees
+    /// If true, users claiming from this Sprinkle will be required to cover the network transaction fees
     pub minter_pays: bool,
 
     /// The total number of claims each individual user is permitted to preform on this Sprinkle
@@ -78,21 +76,23 @@ pub struct Tag {
     pub current_token_location: Pubkey,
 }
 
-pub const TAG_SIZE: usize = 
-  8 +   /// Anchor discriminator  
-  8 +   /// Sprinkle UID
-  1 +   /// TagType
-  32 +  /// Sprinkle authority address
-  32 +  /// Config PDA address
-  8 +   /// Total number of claims
-  8 +   /// Current number claimed counter
-  8 +   /// Number of claims per user
-  1 +   /// Minter pays?
-  32 +  /// Token mint address
-        /// Dont use Option<> here, so we can do offset memcmp lookups
-  8 +   /// price
-  32 +  /// Candy Machine address
-  32 +  /// Whitelist token mint address
-  1 +   /// PDA bump
-  32 +  /// Current hot-potato location
-  50;   /// Padding
+impl Sprinkle {
+  pub const ACCOUNT_SIZE: uisze =
+    8 +   /// Anchor discriminator  
+    8 +   /// Sprinkle UID
+    1 +   /// TagType
+    32 +  /// Sprinkle authority address
+    32 +  /// Config PDA address
+    8 +   /// Total number of claims
+    8 +   /// Current number claimed counter
+    8 +   /// Number of claims per user
+    1 +   /// Minter pays?
+    32 +  /// Token mint address
+          /// !!! Dont use Option<> below here, so we can do offset memcmp lookups !!!
+    8 +   /// price
+    32 +  /// Candy Machine address
+    32 +  /// Whitelist token mint address
+    1 +   /// PDA bump
+    32 +  /// Current hot-potato location
+    50;   /// Padding
+}  
