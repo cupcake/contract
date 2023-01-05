@@ -9,7 +9,7 @@ pub enum SprinkleType {
     /// Mint from a Candy Machine by proxy for users
     CandyMachineDrop,
 
-    /// Transfer a single NFT, optionally refill it with a new one and repeat
+    /// Transfer a single NFT, then optionally refill it with a new one and repeat
     UniqueMutable,
 
     /// Transfer any number of fungible tokens for each claim
@@ -95,4 +95,11 @@ impl Sprinkle {
     1 +   /// PDA bump
     32 +  /// Current hot-potato location
     50;   /// Padding
+
+  pub const TRANSFER_TYPE_SPRINKLE = 
+    SprinkleType::UniqueImmutable
+    | SprinkleType::UniqueMutable
+    | SprinkleType::FungibleTransfer
+    | SprinkleType::HotPotato
+
 }  

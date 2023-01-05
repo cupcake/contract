@@ -45,18 +45,16 @@ pub struct BakeSprinkle<'info> {
 
   ///
   #[account(mut)]
-  pub fee_payer: Signer<'info>,
+  pub payer: Signer<'info>,
 
   ///
-  #[account(
-    mut, 
-    has_one = bakery_authority,
-    seeds = [
-      PDA_PREFIX, 
-      bakery_authority.key().as_ref()
-    ], 
-    bump = config.bump
-  )]
+  #[account(mut, 
+            has_one = bakery_authority,
+            seeds = [
+              PDA_PREFIX, 
+              bakery_authority.key().as_ref()
+            ], 
+            bump = config.bump)]
   pub bakery: Account<'info, Bakery>,
 
   /// CHECK: SprinkleAuthority can be any account that can sign to approve a claim
@@ -64,17 +62,15 @@ pub struct BakeSprinkle<'info> {
   pub sprinkle_authority: UncheckedAccount<'info>,
 
   ///
-  #[account(
-    init_if_needed, 
-    payer = fee_payer, 
-    space = Sprinkle.ACCOUNT_SIZE
-    seeds = [
-      PDA_PREFIX, 
-      bakery_authority.key().as_ref(), 
-      &args.uid.to_le_bytes()
-    ], 
-    bump
-  )]
+  #[account(init_if_needed, 
+            payer = payer, 
+            space = Sprinkle::ACCOUNT_SIZE
+            seeds = [
+              PDA_PREFIX, 
+              bakery_authority.key().as_ref(), 
+              &args.uid.to_le_bytes()
+            ], 
+            bump)]
   pub sprinkle: Account<'info, Sprinkle>,
 
   /// System Program ID
@@ -87,57 +83,83 @@ pub struct BakeSprinkle<'info> {
   pub rent: Sysvar<'info, Rent>,
 }
 
-// Remaining accounts - if doing wallet restricted fungible, or either 1/1 option, pass:
-// token_mint
-// token (w) - ata of token_mint type
+// Remaining accounts: 
+//  - UniqueImmutable or UniqueMutable or FungibleTransfer:
+//    1) token_mint
+//    2) token_ata  (writable) 
 //
-// If doing hotpotato, pass
-// token_mint
-// token (w) - ata of token_mint type
-// edition - existing edition of current token_mint
-// token_metadata_program - token mint on the tag
+//  - HotPotato:
+//    1) token_mint
+//    2) token_ata  (writable)
+//    3) token_edition
+//    4) token_metadata_program 
 //
-// If doing limited/open edition:
-// token_mint
+//  - EditionPrinter:
+//    1) token_mint
 //
-// If using candy machine, pass:
-// candy_machine_id
-// whitelist_mint - optional, if it's not system program, we'll do a mint check and approve tfers.
-// whitelist_token - ata of whitelist_mint type, if present, we use this to pay with.
-// payment_token_mint - if system, we assume you pay in sol. Otherwise user will need to provide this.
-// payment_token - ata of payment token type to approve use of, if not system.
+//  - CandyMachineDrop:
+//    - with Whitelist:
+//      1) candy_machine_id
+//      2) whitelist_token_mint
+//      3) whitelist_token_ata 
+//      4) system_program 
+//
+//    - with SPL Payment:
+//      1) candy_machine_id
+//      2) system_program
+//      3) payment_token
+//      4) payment_token_ata
+//
+//    - with Whitelist + SPL Payment:
+//      1) candy_machine_id
+//      2) whitelist_token_mint
+//      3) whitelist_token_ata 
+//      4) payment_token_mint
+//      5) payment_token_ata 
 
 pub fn handler(ctx: Context<BakeSprinkle>, args: BakeSprinkleParams) -> ProgramResult {
-  let sprinkle_type = args.sprinkle_type;
-  let token_program = &ctx.accounts.token_program;
-  let minter_pays = args.minter_pays;
-  let sprinkle = &mut ctx.accounts.sprinkle;
-  let bakery = &ctx.accounts.bakery;
-  let bakery_pda_seeds = &[&PREFIX[..], &bakery.bakery_authority.as_ref()[..], &[bakery.bump]];
+  let token_program = ctx.accounts.token_program.load()?;
+  let bakery = &ctx.accounts.bakery.load()?;
 
-  // require that if tag has been made before, this action isnt called on a single use kind of tag
+  let mut sprinkle = ctx.accounts.sprinkle.load_mut()?;
+
+  let bakery_pda_seeds = &[&PREFIX[..], &bakery.bakery_authority.as_ref()[..], &[bakery.bump]];
+  let sprinkle_is_unbaked = sprinkle.uid == 0
+  let sprinkle_is_mutable = sprinkle.sprinkle_type != TagType::UniqueImmutable
+  let sprinkle_is_being_refilled = 
+    sprinkle.num_claimed == sprinkle.total_supply
+    && ctx.remaining_accounts[0].key() != sprinkle.token_mint
+
+  /// If this Sprinkle has already been baked, ensure it is mutable
   require!(
-    sprinkle.uid == 0 || sprinkle.sprinkle_type != TagType::UniqueImmutable,
+    sprinkle_is_unbaked || sprinkle_is_mutable,
     SingleUseIsImmutable
   );
 
-  let total_supply = match sprinkle_type {
+  let total_supply = match args.sprinkle_type {
+    /// UniqueImmutable can't be re-baked, HotPotato claim counters aren't incremented
     TagType::UniqueImmutable | TagType::HotPotato => 1,
+
+    /// If the Sprinkle's total_supply has been hit, and the token is being changed,
+    /// increment the total_supply so the Sprinkle can be claimed again
     TagType::UniqueMutable => {
-      if ctx.remaining_accounts[0].key() != sprinkle.token_mint
-          && sprinkle.num_claimed == sprinkle.total_supply
-      {
-        sprinkle.total_supply
-          .checked_add(1)
-          .ok_or(ErrorCode::NumericalOverflowError)?
-      } else {
-        sprinkle.total_supply
+      match sprinkle_is_unbaked || sprinkle_is_being_refilled {
+        true => sprinkle.total_supply.checked_add(1).ok_or(ErrorCode::NumericalOverflowError)?
+        false => sprinkle.total_supply
       }
     }
-    _ => args.num_claims,
+
+    _ => args.num_claims
   };
 
-  let token_mint = match sprinkle_type {
+  let token_mint = match args.sprinkle_type {
+    /// Candy Machine payment token mint
+    TagType::CandyMachineDrop => &ctx.remaining_accounts[3].key()
+    /// Normal token mint
+    _ => &ctx.remaining_accounts[0].key()
+  }
+
+  let token_mint = match args.sprinkle_type {
     TagType::UniqueImmutable
       | TagType::UniqueMutable
       | TagType::FungibleTransfer
@@ -163,13 +185,17 @@ pub fn handler(ctx: Context<BakeSprinkle>, args: BakeSprinkleParams) -> ProgramR
           delegate: ctx.accounts.bakery.to_account_info(),
           authority: ctx.accounts.bakery_authority.to_account_info(),
         };
-        let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
-        approve(context, total_supply)?;
+        approve(
+          CpiContext::new(token_program.to_account_info(), cpi_accounts), 
+          total_supply
+        )?;
       }
 
       if tag_type == TagType::HotPotato {
         require!(
-          sprinkle.uid == 0 || sprinkle.current_token_location == token.key() || token_account.amount == 1,
+          sprinkle_is_unbaked 
+            || sprinkle.current_token_location == token.key() 
+            || token_account.amount == 1,
           CanOnlyMutateHotPotatoWhenAtHome
         );
 
@@ -229,7 +255,7 @@ pub fn handler(ctx: Context<BakeSprinkle>, args: BakeSprinkleParams) -> ProgramR
       require!(
         whitelist_mint.key() == system_program::ID 
           || whitelist_token.key() != system_program::ID 
-          || minter_pays,
+          || args.minter_pays,
         MustProvideWhitelistTokenIfMinterIsNotProvidingIt
       );
 
@@ -238,7 +264,7 @@ pub fn handler(ctx: Context<BakeSprinkle>, args: BakeSprinkleParams) -> ProgramR
       require!(
         payment_token_mint.key() == system_program::ID
           || payment_token.key() != system_program::ID
-          || minter_pays,
+          || args.minter_pays,
         MustProvidePaymentAccountIfMinterIsNotProviding
       );
 
@@ -295,25 +321,6 @@ pub fn handler(ctx: Context<BakeSprinkle>, args: BakeSprinkleParams) -> ProgramR
       token_mint.key()
     }
   };
-
-  sprinkle.per_user = match sprinkle_type {
-    TagType::UniqueImmutable => 1,
-    _ => args.per_user,
-  };
-
-  if sprinkle_type != TagType::UniqueImmutable {
-    sprinkle.total_supply = total_supply;
-  } else {
-    tag.total_supply = 1;
-  }
-
-  sprinkle.minter_pays = minter_pays;
-  sprinkle.uid = args.uid;
-  sprinkle.sprinkle_authority = *ctx.accounts.sprinkle_authority.to_account_info().key;
-  sprinkle.sprinkle_type = sprinkle_type;
-  sprinkle.token_mint = token_mint;
-  sprinkle.bakery = ctx.accounts.bakery.key();
-  sprinkle.bump = *ctx.bumps.get("tag").unwrap();
 
   Ok(())
 }

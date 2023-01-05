@@ -6,19 +6,17 @@ pub struct CreateBakery<'info> {
 
   /// The account which pays all compute and rent fees for the transaction
   #[account(mut)]
-  pub fee_payer: Signer<'info>,
+  pub payer: Signer<'info>,
 
   /// The PDA of the Bakery being created
-  #[account(
-    init, 
-    payer = fee_payer, 
-    space =  Bakery.ACCOUNT_SIZE,
-    seeds = [
-      PDA_PREFIX, 
-      authority.key().as_ref()
-    ], 
-    bump
-  )]
+  #[account(init, 
+            payer = payer, 
+            space =  Bakery::ACCOUNT_SIZE,
+            seeds = [
+              PDA_PREFIX.as_ref(), 
+              authority.key().as_ref()
+            ], 
+            bump)]
   pub bakery: Account<'info, Config>,
 
   /// System Program ID

@@ -19,7 +19,7 @@ pub struct ClaimSprinkle<'info> {
 
   /// The account which pays all compute and rent fees for the transaction
   #[account(mut)]
-  pub fee_payer: Signer<'info>,
+  pub payer: Signer<'info>,
 
   /// The PDA of the Bakery associated with the Sprinkle being claimed from
   #[account(mut)]
@@ -29,31 +29,27 @@ pub struct ClaimSprinkle<'info> {
   pub sprinkle_authority: Signer<'info>,
 
   /// The PDA of the Sprinkle being claimeed from
-  #[account(
-    mut, 
-    has_one = sprinkle_authority,
-    seeds = [
-      PDA_PREFIX, 
-      bakery.bakery_authority.key().as_ref(), 
-      &sprinkle.uid.to_le_bytes()
-    ], 
-    bump = sprinkle.bump
-  )]
+  #[account(mut, 
+            has_one = sprinkle_authority,
+            seeds = [
+              PDA_PREFIX.as_ref(), 
+              bakery.bakery_authority.key().as_ref(), 
+              &sprinkle.uid.to_le_bytes()
+            ], 
+            bump = sprinkle.bump)]
   pub sprinkle: Box<Account<'info, Sprinkle>>,
 
   /// The PDA of the UserInfo, being either created or updated, for the associated User and Sprinkle
-  #[account(
-    init_if_needed, 
-    payer = fee_payer, 
-    space = UserInfo.ACCOUNT_SIZE,
-    seeds = [
-      PREFIX, 
-      bakery.bakery_authority.as_ref(), 
-      &sprinkle.uid.to_le_bytes(), 
-      user.key().as_ref()
-    ], 
-    bump
-  )]
+  #[account(init_if_needed, 
+            payer = payer, 
+            space = UserInfo::ACCOUNT_SIZE,
+            seeds = [
+              PDA_PREFIX.as_ref(), 
+              bakery.bakery_authority.as_ref(), 
+              &sprinkle.uid.to_le_bytes(), 
+              user.key().as_ref()
+            ], 
+            bump)]
   pub user_info: Box<Account<'info, UserInfo>>,
 
   /// System Program ID
@@ -117,28 +113,32 @@ pub struct CandyMachineArgs {
 }
 
 pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
-  let tag = &mut ctx.accounts.tag;
-  let tag_type: TagType = tag.tag_type;
-  let config = &ctx.accounts.config;
-  let fee_payer = &ctx.accounts.fee_payer;
-  let user_info = &ctx.accounts.user_info;
-  let user = &ctx.accounts.user;
-  let config_seeds = &[&PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
+  let bakery = ctx.accounts.bakery.load()?;
+  let payer = ctx.accounts.payer.load()?;
+  let user_info = ctx.accounts.user_info.load()?;
+  let user = ctx.accounts.user.load()?;
 
-  if tag.tag_type != TagType::HotPotato
-    && (tag.total_supply > 0)
-    && (tag.num_claimed == tag.total_supply)
-  {
-    return Err(ErrorCode::TagDepleted.into());
-  };
+  let mut sprinkle = ctx.accounts.sprinkle.load_mut()?;
 
-  require!(
-    tag.tag_type == TagType::HotPotato || user_info.num_claimed < tag.per_user,
-    ErrorCode::ClaimLimitExceeded
-  );
+  let bakery_seeds = &[&PDA_PREFIX[..], &bakery.bakery_authority.as_ref()[..], &[bakery.bump]];
+  let sprinkle_type: SprinkleType = sprinkle.sprinkle_type;
+
+  if tag.tag_type !== SprinkleType::HotPotato {
+    require!(
+      (sprinkle.total_supply == 0) || (sprinkle.num_claimed < sprinkle.total_supply),
+      ErrorCode::TagDepleted
+    );
+    require!(
+      user_info.num_claimed < sprinkle.per_user,
+      ErrorCode::ClaimLimitExceeded
+    );
+  }
 
   if tag.minter_pays {
-    require!(config.authority != fee_payer.key(), AuthorityShouldNotBePayer);
+    require!(
+      config.authority != payer.key(),
+      ErrorCode::AuthorityShouldNotBePayer
+    );
   }
 
   let mut amount_to_claim = 1;
@@ -178,7 +178,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
           master_edition.key(),
           new_token_mint.key(),
           new_mint_authority.key(),
-          fee_payer.key(),
+          payer.key(),
           config.authority,
           token.key(),
           update_auth,
@@ -193,7 +193,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
           master_edition.clone(),
           new_token_mint.clone(),
           new_mint_authority.clone(),
-          fee_payer.to_account_info(),
+          payer.to_account_info(),
           config.to_account_info(),
           token.clone(),
           update_authority.clone(),
@@ -232,7 +232,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
       let mut keys = vec![
         AccountMeta::new(candy_machine_id.key(), false),
         AccountMeta::new_readonly(candy_machine_creator.key(), false),
-        AccountMeta::new(fee_payer.key(), true),
+        AccountMeta::new(payer.key(), true),
         AccountMeta::new(candy_machine_wallet.key(), false),
         AccountMeta::new(new_metadata.key(), false),
         AccountMeta::new(new_token_mint.key(), false),
@@ -250,7 +250,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
       let mut accounts = vec![
         candy_machine_id.clone(),
         candy_machine_creator.clone(),
-        fee_payer.to_account_info(),
+        payer.to_account_info(),
         candy_machine_wallet.clone(),
         new_metadata.clone(),
         new_token_mint.clone(),
@@ -381,7 +381,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
         user_token_account,
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
-        fee_payer,
+        payer,
         anchor_spl::token::TokenAccount::LEN,
         signer_seeds
       )?;
@@ -453,7 +453,7 @@ pub fn handler(ctx: Context<ClaimSprinkle>) -> ProgramResult {
 
       let cpi_accounts = CloseAccount {
         account: token.clone(),
-        destination: fee_payer.to_account_info(),
+        destination: payer.to_account_info(),
         authority: config.to_account_info(),
       };
       let context = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
