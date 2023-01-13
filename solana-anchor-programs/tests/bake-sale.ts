@@ -151,7 +151,7 @@ describe('bake-sale', async () => {
       tokenMetadataProgram: '',
       cupcakeProgram: cupcakeProgram.programId
     })
-    .signers([bidder, poapTokenMint])
+    .signers([bidder, newPoapMint])
     .rpc()
   console.log('\t', placeBidTx, '\n')
 
