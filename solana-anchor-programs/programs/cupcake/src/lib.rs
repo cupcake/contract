@@ -724,7 +724,7 @@ pub struct AddOrRefillTag<'info> {
     pub payer: Signer<'info>,
     #[account(mut, seeds = [PREFIX, authority.key().as_ref()], bump=config.bump, has_one = authority)]
     pub config: Account<'info, Config>,
-    // CHECK: TagAuthority can be any account that can sign to approve a claim.
+    /// CHECK: TagAuthority can be any account that can sign to approve a claim.
     #[account(mut)]
     pub tag_authority: UncheckedAccount<'info>,
     #[account(init_if_needed, payer = payer, seeds = [PREFIX, authority.key().as_ref(), &tag_params.uid.to_le_bytes()], bump, space = TAG_SIZE)]
@@ -755,6 +755,7 @@ pub struct AddOrRefillTag<'info> {
 
 #[derive(Accounts)]
 pub struct ClaimTag<'info> {
+    /// CHECK: User can be any account receiving the sprinkle token.
     pub user: UncheckedAccount<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -825,14 +826,14 @@ pub enum TagType {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct AddOrRefillTagParams {
-    uid: u64,
-    tag_type: TagType,
-    num_claims: u64,
-    per_user: u64,
-    minter_pays: bool,
+    pub uid: u64,
+    pub tag_type: TagType,
+    pub num_claims: u64,
+    pub per_user: u64,
+    pub minter_pays: bool,
     // candy only
-    price_per_mint: Option<u64>,
-    whitelist_burn: bool,
+    pub price_per_mint: Option<u64>,
+    pub whitelist_burn: bool,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]

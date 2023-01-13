@@ -3,14 +3,15 @@ import { Program } from '@project-serum/anchor';
 import { ASSOCIATED_PROGRAM_ID } from '@project-serum/anchor/dist/cjs/utils/token';
 import { createAssociatedTokenAccount, createMint, mintTo, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { LAMPORTS_PER_SOL, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
-import { CupcakeProgram } from '../target/types/cupcake_program';
+import { Cupcake } from '../target/types/cupcake';
 
 export const PREFIX = 'cupcake';
 
 describe('cupcake', () => {
-  anchor.setProvider(anchor.Provider.env());
+  const provider = anchor.Provider.env()
+  anchor.setProvider(provider);
 
-  const program = anchor.workspace.CupcakeProgram as Program<CupcakeProgram>;
+  const program = anchor.workspace.Cupcake as Program<Cupcake>;
 
   const admin = anchor.web3.Keypair.generate();
 
@@ -20,8 +21,8 @@ describe('cupcake', () => {
   let token: any;
 
   it('initialize config', async () => {
-    let sig = await program.provider.connection.requestAirdrop(admin.publicKey, LAMPORTS_PER_SOL * 10);
-    await program.provider.connection.confirmTransaction(sig, 'singleGossip');
+    let sig = await provider.connection.requestAirdrop(admin.publicKey, LAMPORTS_PER_SOL * 10);
+    await provider.connection.confirmTransaction(sig, 'singleGossip');
 
     configPDA = (
       await anchor.web3.PublicKey.findProgramAddress(
@@ -30,15 +31,12 @@ describe('cupcake', () => {
       )
     )[0];
 
-    const tx = await program.rpc.initialize({
-      accounts: {
+    const tx = await program.methods.initialize()
+      .accounts({
         authority: admin.publicKey,
         payer: admin.publicKey,
         config: configPDA,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [admin],
-    });
+      });
     console.log('Your transaction signature', tx);
   });
 
@@ -59,16 +57,14 @@ describe('cupcake', () => {
     token = await createAssociatedTokenAccount(program.provider.connection, admin, tokenMint, admin.publicKey);
 
     await mintTo(program.provider.connection, admin, tokenMint, token, admin, 1);
-
     const newTagParams: any = {
       uid: tagUID,
       tagType: 0,
       numClaims: new anchor.BN(0),
       perUser: new anchor.BN(0),
     };
-
-    const tx = await program.rpc.addTag(newTagParams, {
-      accounts: {
+    const tx = await program.methods.addOrRefillTag(newTagParams)
+      .accounts({
         authority: admin.publicKey,
         payer: admin.publicKey,
         config: configPDA,
@@ -80,9 +76,7 @@ describe('cupcake', () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
-      },
-      signers: [admin],
-    });
+      })
     console.log('Your transaction signature', tx);
   });
 });
