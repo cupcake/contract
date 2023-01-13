@@ -120,7 +120,7 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
         }
     )?;
 
-    // Set the initial state for the bake sale
+    // Set the initial state for the bake sale. Leave current_bid unset to default to 0.
     let bake_sale = &mut ctx.accounts.bake_sale;
     bake_sale.auction_length = args.auction_length;
     bake_sale.reserve_price = args.reserve_price;

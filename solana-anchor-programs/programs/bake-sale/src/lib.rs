@@ -9,7 +9,7 @@ pub mod state;
 use errors::ErrorCode;
 use instructions::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("bakeCUvhUFBvQwzsuAHjuzjoXdnHeA4yD4rtjuBzMoV");
 
 pub const PDA_PREFIX: &[u8] = b"bake-sale";
 
