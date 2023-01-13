@@ -168,10 +168,10 @@ pub fn handler(ctx: Context<PlaceBid>, args: PlaceBidArgs) -> Result<()> {
 
     // If this is the first bid, the amount must be at least the reserve price. If there 
     // is an existing bid, the amount must be at least the existing bid + the tick size.
-    let mut minimum_bid = ctx.accounts.bake_sale.reserve_price;
-    if has_previous_bid {
-      minimum_bid = ctx.accounts.bake_sale.current_bid + ctx.accounts.bake_sale.tick_size;
-    }
+    let minimum_bid = match has_previous_bid {
+      true => ctx.accounts.bake_sale.current_bid + ctx.accounts.bake_sale.tick_size,
+      false => ctx.accounts.bake_sale.reserve_price
+    };
     require!(
       args.bid_size >= minimum_bid,
       InsufficientBidError,
