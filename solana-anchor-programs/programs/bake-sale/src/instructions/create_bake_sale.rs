@@ -13,9 +13,7 @@ pub struct CreateBakeSaleArgs {
     pub auction_length: u64,
     pub reserve_price: u64,
     pub tick_size: u64,
-    pub num_poaps: u64,
     pub bidders_pay: bool,
-    pub require_authority_signature: bool
 }
 
 #[derive(Accounts)]
@@ -112,7 +110,7 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
         AddOrRefillTagParams {
             uid: args.auction_id,
             tag_type: TagType::LimitedOrOpenEdition,
-            num_claims: args.num_poaps,
+            num_claims: 0,
             per_user: 1,
             minter_pays: args.bidders_pay,
             whitelist_burn: false,
@@ -126,7 +124,6 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
     bake_sale.reserve_price = args.reserve_price;
     bake_sale.tick_size = args.tick_size;
     bake_sale.bidders_pay = args.bidders_pay;
-    bake_sale.require_authority_signature = args.require_authority_signature;
     bake_sale.payment_mint = payment_mint_key;
     bake_sale.poap_mint = poap_mint_key;
     bake_sale.prize_mint = prize_mint_key;

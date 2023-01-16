@@ -27,9 +27,6 @@ pub struct BakeSale {
     /// If this is true, bidders must pay the transaction fees.
     pub bidders_pay: bool,
 
-    /// If this is true, the bakery authority must be a signer for each bid.
-    pub require_authority_signature: bool,
-
     /// 
     pub current_bid: u64,
 

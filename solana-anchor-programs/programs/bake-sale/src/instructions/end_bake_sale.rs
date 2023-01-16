@@ -3,17 +3,12 @@ use anchor_spl::token::{Transfer, Token, self};
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::system_instruction;
 use anchor_lang::solana_program::program::invoke_signed;
-use cupcake::{Config, program::Cupcake};
 
 use crate::{PDA_PREFIX, state::BakeSale};
 
 #[derive(Accounts)]
 pub struct EndBakeSale<'info> {
     pub bakery_authority: Signer<'info>,
-
-    /// The bakery pda associated with the provided bake sale.
-    #[account(mut)]
-    pub bakery: Account<'info, Config>,
 
     /// The bake sale pda being closed.
     #[account(mut, 
@@ -31,9 +26,6 @@ pub struct EndBakeSale<'info> {
 
     /// The token program id.
     pub token_program: Program<'info, Token>,
-
-    /// The cupcake program id.
-    pub cupcake_program: Program<'info, Cupcake>
 }
 
 impl<'info> EndBakeSale<'info> {

@@ -110,9 +110,7 @@ describe('bake-sale', async () => {
       auctionLength: new BN(100),
       reservePrice: new BN(0),
       tickSize: new BN(1),
-      numPoaps: new BN(999),
       biddersPay: false,
-      requireAuthoritySignature: false
     })
     .accounts({
       bakeryAuthority: admin.publicKey,
