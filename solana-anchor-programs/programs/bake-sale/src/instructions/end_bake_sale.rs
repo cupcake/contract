@@ -8,6 +8,7 @@ use crate::{PDA_PREFIX, state::BakeSale};
 
 #[derive(Accounts)]
 pub struct EndBakeSale<'info> {
+    ///
     pub bakery_authority: Signer<'info>,
 
     /// The bake sale pda being closed.

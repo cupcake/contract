@@ -2,11 +2,11 @@
 seeds = false
 
 [programs.localnet]
-cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
+cupcake = "EJ25xcs2AQ5bWySGiv8AGWx84ehafEZ7XuT1QxsSWFtM"
 bake_sale = "bakeCUvhUFBvQwzsuAHjuzjoXdnHeA4yD4rtjuBzMoV"
 
 [programs.devnet]
-cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
+cupcake = "EJ25xcs2AQ5bWySGiv8AGWx84ehafEZ7XuT1QxsSWFtM"
 bake_sale = "bakeCUvhUFBvQwzsuAHjuzjoXdnHeA4yD4rtjuBzMoV"
 
 [programs.mainnet]
