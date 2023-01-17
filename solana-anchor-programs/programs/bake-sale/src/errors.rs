@@ -2,9 +2,12 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Bid size is less than the current bid + tick size")]
+    #[msg("Bid size is less than the current bid + tick size.")]
     InsufficientBidError,
 
-    #[msg("failed to perform some math operation safely")]
+    #[msg("Cannot bid on a concluded auction.")]
     AuctionNotActiveError,
+
+    #[msg("Auctions cannot be concluded before the end time.")]
+    AuctionStillActiveError,
 }

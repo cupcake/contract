@@ -66,6 +66,14 @@ impl<'info> EndBakeSale<'info> {
 pub fn handler(ctx: Context<EndBakeSale>) -> Result<()> {
     let bake_sale = &ctx.accounts.bake_sale;
 
+    // Ensure the bake sale auction has ended.
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp;
+    require!(
+      !bake_sale.is_active(current_timestamp), 
+      AuctionStillActiveError
+    );
+
     // Transfer the bake sale prize token to the final winning bidder.
     token::transfer(
         ctx.accounts.pay_out_winner_ctx(), 

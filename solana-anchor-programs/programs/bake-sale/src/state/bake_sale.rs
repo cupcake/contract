@@ -36,6 +36,9 @@ pub struct BakeSale {
     pub current_winner: Pubkey,
 
     ///
+    pub start_time: u64,
+
+    ///
     pub auction_id_bytes: [u8; 8],
 
     ///
@@ -51,6 +54,10 @@ impl BakeSale {
 
     pub fn has_spl_payment(&self) -> bool {
       self.payment_mint != system_program::ID
+    }
+
+    pub fn is_active(&self, current_timestamp: i64) -> bool {
+      self.start_time + self.auction_length > u64::try_from(current_timestamp).ok().unwrap()
     }
 
     pub fn pda_seeds(&self) -> [&[u8]; 4] {

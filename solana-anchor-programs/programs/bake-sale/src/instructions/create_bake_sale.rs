@@ -102,7 +102,11 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
     let poap_mint_key = ctx.accounts.poap_mint.key();
     let prize_mint_key = ctx.accounts.prize_mint.key();
 
-    // Set the bump here so we can use it to derive signer seeds when baking the POAP
+    // Grab the current timestamp to use as the auction start time.
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp;
+
+    // Set the bump here so we can use it to derive signer seeds when baking the POAP.
     ctx.accounts.bake_sale.pda_bump = [*ctx.bumps.get("bake_sale").unwrap()];
 
     // Bake the provided POAP into a sprinkle in the cupcake program. 
@@ -131,6 +135,7 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
     bake_sale.payment_mint = payment_mint_key;
     bake_sale.poap_mint = poap_mint_key;
     bake_sale.prize_mint = prize_mint_key;
+    bake_sale.start_time = u64::try_from(current_timestamp).ok().unwrap();
 
     Ok(())
 }

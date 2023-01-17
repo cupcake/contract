@@ -166,6 +166,14 @@ pub fn handler(ctx: Context<PlaceBid>, args: PlaceBidArgs) -> Result<()> {
     let has_spl_payment = ctx.accounts.bake_sale.has_spl_payment();
     let user_needs_poap = ctx.accounts.user_needs_poap();
 
+    // Ensure the bake sale auction is still active.
+    let clock = Clock::get()?;
+    let current_timestamp = clock.unix_timestamp;
+    require!(
+      ctx.accounts.bake_sale.is_active(current_timestamp), 
+      AuctionNotActiveError
+    );
+
     // If this is the first bid, the amount must be at least the reserve price. If there 
     // is an existing bid, the amount must be at least the existing bid + the tick size.
     let minimum_bid = match has_previous_bid {
