@@ -17,6 +17,7 @@ pub struct CreateBakeSaleArgs {
 }
 
 #[derive(Accounts)]
+#[instruction(args: CreateBakeSaleArgs)]
 pub struct CreateBakeSale<'info> {
     /// The authority account of the provided bakery.
     #[account(mut)]
@@ -38,7 +39,8 @@ pub struct CreateBakeSale<'info> {
               space = BakeSale::SIZE,
               seeds = [
                   PDA_PREFIX,
-                  bakery_authority.key().as_ref()
+                  bakery_authority.key().as_ref(),
+                  &args.auction_id.to_le_bytes()
               ],
               bump)]
     pub bake_sale: Account<'info, BakeSale>,
@@ -120,6 +122,7 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
 
     // Set the initial state for the bake sale. Leave current_bid unset to default to 0.
     let bake_sale = &mut ctx.accounts.bake_sale;
+    bake_sale.auction_id = args.auction_id;
     bake_sale.auction_length = args.auction_length;
     bake_sale.reserve_price = args.reserve_price;
     bake_sale.tick_size = args.tick_size;

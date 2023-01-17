@@ -4,6 +4,9 @@ use anchor_lang::solana_program::system_program;
 #[account]
 pub struct BakeSale {
     ///
+    pub auction_id: u64,
+
+    ///
     pub bakery_authority: Pubkey,
 
     /// The total length of the auction, in seconds
@@ -38,7 +41,7 @@ pub struct BakeSale {
 }
 
 impl BakeSale {
-    pub const SIZE: usize = 8 + 32 + 64 + 64 + 64 + 32 + 32 + 32 + 1 + 1 + 64 + 32 + 8;
+    pub const SIZE: usize = 8 + 64 + 32 + 64 + 64 + 64 + 32 + 32 + 32 + 1 + 1 + 64 + 32 + 8;
 
     pub fn has_previous_bid(&self) -> bool {
       self.current_bid > 0

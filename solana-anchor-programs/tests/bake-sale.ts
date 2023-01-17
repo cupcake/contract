@@ -47,7 +47,8 @@ describe('bake-sale', async () => {
     await PublicKey.findProgramAddress(
       [
         Buffer.from('bake-sale'), 
-        admin.publicKey.toBuffer()
+        admin.publicKey.toBuffer(),
+        new BN(0).toBuffer('le', 8)
       ],
       bakeSaleProgram.programId
     )
@@ -101,7 +102,7 @@ describe('bake-sale', async () => {
     })
     .signers([admin])
     .rpc()
-  console.log("\t" + createBakeryTx, '\n')
+  console.log(createBakeryTx)
 
   console.log("Creating bake sale:")
   const createBakeSaleTx = await bakeSaleProgram.methods

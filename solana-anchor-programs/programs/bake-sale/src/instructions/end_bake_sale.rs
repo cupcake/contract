@@ -17,7 +17,8 @@ pub struct EndBakeSale<'info> {
               has_one = current_winner,
               seeds = [
                   PDA_PREFIX,
-                  bakery_authority.key().as_ref()
+                  bakery_authority.key().as_ref(),
+                  &bake_sale.auction_id.to_le_bytes()
               ],
               bump)]
     pub bake_sale: Account<'info, BakeSale>,
