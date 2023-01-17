@@ -97,10 +97,10 @@ impl<'info> CreateBakeSale<'info> {
 /// Each bake sale is an auction for an spl token, with free POAPs for each
 /// successful bidder, printed through the cupcake program.
 pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result<()> {
+    let bakery_authority_key = ctx.accounts.bakery_authority.key();
     let payment_mint_key = ctx.accounts.payment_mint.key();
     let poap_mint_key = ctx.accounts.poap_mint.key();
     let prize_mint_key = ctx.accounts.prize_mint.key();
-    let system_program_key = ctx.accounts.system_program.key();
 
     // Set the bump here so we can use it to derive signer seeds when baking the POAP
     ctx.accounts.bake_sale.pda_bump = [*ctx.bumps.get("bake_sale").unwrap()];
@@ -122,7 +122,8 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
 
     // Set the initial state for the bake sale. Leave current_bid unset to default to 0.
     let bake_sale = &mut ctx.accounts.bake_sale;
-    bake_sale.auction_id = args.auction_id;
+    bake_sale.bakery_authority = bakery_authority_key;
+    bake_sale.auction_id_bytes = args.auction_id.to_le_bytes();
     bake_sale.auction_length = args.auction_length;
     bake_sale.reserve_price = args.reserve_price;
     bake_sale.tick_size = args.tick_size;
@@ -130,7 +131,6 @@ pub fn handler(ctx: Context<CreateBakeSale>, args: CreateBakeSaleArgs) -> Result
     bake_sale.payment_mint = payment_mint_key;
     bake_sale.poap_mint = poap_mint_key;
     bake_sale.prize_mint = prize_mint_key;
-    bake_sale.current_winner = system_program_key;
 
     Ok(())
 }

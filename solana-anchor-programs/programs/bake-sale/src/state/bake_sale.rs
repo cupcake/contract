@@ -1,11 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::system_program;
 
+use crate::PDA_PREFIX;
+
 #[account]
 pub struct BakeSale {
-    ///
-    pub auction_id: u64,
-
     ///
     pub bakery_authority: Pubkey,
 
@@ -37,6 +36,9 @@ pub struct BakeSale {
     pub current_winner: Pubkey,
 
     ///
+    pub auction_id_bytes: [u8; 8],
+
+    ///
     pub pda_bump: [u8; 1]
 }
 
@@ -51,7 +53,7 @@ impl BakeSale {
       self.payment_mint != system_program::ID
     }
 
-    pub fn pda_seeds(&self) -> [&[u8]; 2] {
-        [self.bakery_authority.as_ref(), &self.pda_bump]
+    pub fn pda_seeds(&self) -> [&[u8]; 4] {
+        [PDA_PREFIX, self.bakery_authority.as_ref(), &self.auction_id_bytes,  &self.pda_bump]
     }
 }
