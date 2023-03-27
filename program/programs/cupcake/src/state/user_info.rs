@@ -15,7 +15,7 @@ pub struct UserInfo {
 impl UserInfo {
     /// The minimum required account size for a UserInfo PDA.
     pub const SIZE: usize = 
-        8 +   // discriminator
-        8 +   // num_claimed
-        1;    // bump;
+        8 +   // Anchor discriminator
+        8 +   // NumClaimed
+        1;    // PDA bump
 }

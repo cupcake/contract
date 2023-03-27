@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
     /// The minimum required account size for a Bakery PDA.
     pub const SIZE: usize = 
-        8 +     // discriminator
-        32 +    // config
-        1;      // bump
+        8 +     // Anchor discriminator
+        32 +    // BakeryAuthority pubkey
+        1;      // PDA bump
 }

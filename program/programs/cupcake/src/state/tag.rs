@@ -78,21 +78,21 @@ pub struct Tag {
 impl Tag {
     /// The minimum required account size for a Sprinkle PDA.
     pub const SIZE: usize = 
-        8 +     // discriminator  
-        8 +     // uid
-        1 +     //tag_type
-        32 +    //tag_authority
-        32 +    //config
-        8 +     // total_supply
-        8 +     // num_claimed
-        8 +     // per_user
-        1 +     // minter pays type
-        32 +    // token_mint
+        8 +     // Anchor discriminator  
+        8 +     // UID
+        1 +     // SprinkleType
+        32 +    // TagAuthority pubkey
+        32 +    // Bakery pubkey
+        8 +     // TotalSupply
+        8 +     // NumClaimed
+        8 +     // PerUser
+        1 +     // Minter pays?
+        32 +    // TokenMint pubkey
                 // Dont use option here so we can do offset memcmp lookups
-        8 +     // price
-        32 +    // candy_machine
-        32 +    // wl_mint
-        1 +     //bump;
-        32 +    // current token location
-        50;     //padding
+        8 +     // Pricer per mint
+        32 +    // CandyMachine pubkey
+        32 +    // WhitelistToken pubkey
+        1 +     // PDA bump
+        32 +    // HotPotato location pubkey
+        50;     // ~ Padding ~
 }
