@@ -1,21 +1,19 @@
-use {
-    crate::ErrorCode,
-    anchor_lang::{
-        error,
-        prelude::{AccountInfo, Program, Pubkey, Rent, Result, System, Sysvar},
-        require,
-        solana_program::{
-            hash, msg,
-            program::{invoke, invoke_signed},
-            program_pack::{IsInitialized, Pack},
-            system_instruction,
-        },
-        Key, ToAccountInfo,
-    },
-    anchor_spl::associated_token::get_associated_token_address,
-    arrayref::array_ref,
-    std::convert::TryInto,
+use crate::errors::ErrorCode;
+use anchor_lang::{
+  error,
+  prelude::{AccountInfo, Program, Pubkey, Rent, Result, System, Sysvar},
+  require,
+  solana_program::{
+      hash, msg,
+      program::{invoke, invoke_signed},
+      program_pack::{IsInitialized, Pack},
+      system_instruction,
+  },
+  Key, ToAccountInfo,
 };
+use anchor_spl::associated_token::get_associated_token_address;
+use arrayref::array_ref;
+use std::convert::TryInto;
 
 pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> Result<()> {
     if key1 != key2 {
@@ -37,11 +35,11 @@ pub fn assert_is_ata(
     assert_keys_equal(ata_account.mint, mint.key())?;
     assert_keys_equal(get_associated_token_address(wallet, mint), *ata.key)?;
     if delegate.is_none() {
-        require!(ata_account.delegate.is_none(), AtaShouldNotHaveDelegate);
+        require!(ata_account.delegate.is_none(), ErrorCode::AtaShouldNotHaveDelegate);
     } else if let Some(allowed_del) = delegate {
         if ata_account.delegate.is_some() {
             let key = ata_account.delegate.unwrap();
-            require!(key == *allowed_del, AtaDelegateShouldBeConfig)
+            require!(key == *allowed_del, ErrorCode::AtaDelegateShouldBeConfig)
         }
     }
     Ok(ata_account)
