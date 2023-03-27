@@ -12,26 +12,65 @@ use crate::utils::{assert_is_ata, assert_keys_equal, create_or_allocate_account_
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct CandyMachineArgs {
+    /// Discriminator of the CandyMachine instruction to hit.
     instruction: [u8; 8],
+
+    /// Candy Machine creator bump used in PDA generation.
     creator_bump: u8,
 }
 
 #[derive(Accounts)]
 pub struct ClaimTag<'info> {
+    /// Account which receives the NFT claimed from this Sprinkle.
+    /// CHECK: User can be any account that can sign a transaction.
     pub user: UncheckedAccount<'info>,
+
+    /// Account which pays the network and rent fees, for this transaction only.
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    /// PDA which stores token approvals for a Bakery, and executes the transfer during claims.
     #[account(mut)]
     pub config: Box<Account<'info, Config>>,
+
+    /// Account which has the authority to execute claims for this Sprinkle.
     pub tag_authority: Signer<'info>,
-    #[account(mut, seeds = [PREFIX, config.authority.key().as_ref(), &tag.uid.to_le_bytes()], bump=tag.bump, has_one = tag_authority)]
+
+    /// PDA which stores data about the state of a Sprinkle.
+    #[account(mut, 
+              has_one = tag_authority,
+              seeds = [
+                  PREFIX, 
+                  config.authority.key().as_ref(), 
+                  &tag.uid.to_le_bytes()
+              ], 
+              bump = tag.bump)]
     pub tag: Box<Account<'info, Tag>>,
-    #[account(init_if_needed, payer = payer, seeds = [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref()], bump, space = USER_INFO_SIZE)]
+
+    /// PDA which stores a counter of how many times this user has claimed this Sprinkle.
+    #[account(init_if_needed, 
+              payer = payer,
+              space = UserInfo::SIZE, 
+              seeds = [
+                  PREFIX, 
+                  config.authority.as_ref(), 
+                  &tag.uid.to_le_bytes(), 
+                  user.key().as_ref()
+              ], 
+              bump)]
     pub user_info: Box<Account<'info, UserInfo>>,
+
+    /// SPL System Program, required for account allocation.
     pub system_program: Program<'info, System>,
+
+    /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
+
+    /// SPL Rent Sysvar, required for account allocation.
     pub rent: Sysvar<'info, Rent>,
-    // Remaining accounts - if doing a wallet fungible or a 1/1, pass:
+}
+
+// Remaining accounts - if doing a wallet fungible or a 1/1, pass:
     // token (w) - ata of token_mint type owned by config authority wallet
     // user_ata (w) - ata of token_mint type for user
     //
@@ -74,11 +113,10 @@ pub struct ClaimTag<'info> {
     // whitelist_token_mint (w)
     // > Only needed if candy machine has token mint
     // token_account_info (w) - either configs or yours depending on who pays
-}
 
 pub fn handler<'a, 'b, 'c, 'info>(
   ctx: Context<'a, 'b, 'c, 'info, ClaimTag<'info>>,
-  creator_bump: u8,
+  creator_bump: u8, // Ignored except in candy machine use and hotpotato use. In hotpotato is used to make the token account.
 ) -> Result<()> {   
     let tag = &mut ctx.accounts.tag;
     let tag_type: TagType = tag.tag_type;

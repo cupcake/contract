@@ -11,7 +11,7 @@ cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "/root/coldwallet.json"
 
 [scripts]

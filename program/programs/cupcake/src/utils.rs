@@ -15,6 +15,7 @@ use anchor_spl::associated_token::get_associated_token_address;
 use arrayref::array_ref;
 use std::convert::TryInto;
 
+/// Checks if two PublicKeys are equal.
 pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> Result<()> {
     if key1 != key2 {
         Err(error!(ErrorCode::PublicKeyMismatch))
@@ -23,6 +24,7 @@ pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> Result<()> {
     }
 }
 
+/// Checks if a provided account is an Associated Token Account.
 pub fn assert_is_ata(
     ata: &AccountInfo,
     wallet: &Pubkey,
@@ -45,6 +47,7 @@ pub fn assert_is_ata(
     Ok(ata_account)
 }
 
+/// Checks if one provided account is owned by a second.
 pub fn assert_owned_by(account: &AccountInfo, owner: &Pubkey) -> Result<()> {
     if account.owner != owner {
         Err(error!(ErrorCode::IncorrectOwner))
@@ -53,6 +56,7 @@ pub fn assert_owned_by(account: &AccountInfo, owner: &Pubkey) -> Result<()> {
     }
 }
 
+/// Checks if the provided account has already been initialized.
 pub fn assert_initialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -> Result<T> {
     let account: T = T::unpack_unchecked(&account_info.data.borrow())?;
     if !account.is_initialized() {
@@ -62,6 +66,7 @@ pub fn assert_initialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -
     }
 }
 
+/// Grabs an NFT's update authority address from the raw account state.
 pub fn grab_update_authority<'a>(metadata: &AccountInfo<'a>) -> Result<Pubkey> {
     let data = metadata.data.borrow();
     let key_bytes = array_ref![data, 1, 32];
@@ -69,6 +74,7 @@ pub fn grab_update_authority<'a>(metadata: &AccountInfo<'a>) -> Result<Pubkey> {
     Ok(key)
 }
 
+/// Grabs the supply of a Master Edition NFT from the raw account state.
 pub fn get_master_edition_supply(account_info: &AccountInfo) -> Result<u64> {
     // In token program, 1,8
     let data = account_info.try_borrow_data().unwrap();
@@ -78,6 +84,7 @@ pub fn get_master_edition_supply(account_info: &AccountInfo) -> Result<u64> {
     Ok(u64::from_le_bytes(*bytes))
 }
 
+/// Calculates the sighash of the union of two strings.
 pub fn sighash(namespace: &str, name: &str) -> [u8; 8] {
     let preimage = format!("{}:{}", namespace, name);
 
