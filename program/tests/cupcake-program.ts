@@ -9,6 +9,7 @@ import {
   getAssociatedTokenAddressSync, 
   mintTo,
   TOKEN_PROGRAM_ID, 
+  getAccount
 } from '@solana/spl-token';
 import { 
   createCreateInstruction,
@@ -17,6 +18,7 @@ import {
   createMintInstruction, 
   PrintSupply, 
   PROGRAM_ID,
+  TokenRecord,
   TokenStandard
 } from "@metaplex-foundation/mpl-token-metadata"
 import { LAMPORTS_PER_SOL, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
@@ -80,8 +82,7 @@ function getMasterEditionPDA(tokenMint: anchor.web3.PublicKey) {
   )[0]
 }
 
-function getTokenRecordPDA(tokenMint: anchor.web3.PublicKey, owner: anchor.web3.PublicKey) {
-  const associatedToken = getAssociatedTokenAddressSync(tokenMint, owner);
+function getTokenRecordPDA(tokenMint: anchor.web3.PublicKey, associatedToken: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("metadata"), 
@@ -142,6 +143,7 @@ describe('cupcake', () => {
       .signers([admin])
       .rpc()
     console.log('Your transaction signature', tx);
+    console.log("Bakery address:", bakeryPDA)
   });
 
   it('Should mint a normal NFT', async () => {
@@ -252,8 +254,6 @@ describe('cupcake', () => {
 
   it('Should claim the Refillable1Of1 Sprinkle', async () => {
     const userATA = await getAssociatedTokenAddress(tokenMint, user.publicKey)
-    const metadataPDA = getMetadataPDA(tokenMint)
-    const masterEditionPDA = getMasterEditionPDA(tokenMint)
     try {
     const tx = await cupcakeProgram.methods
       .claimTag(0)
@@ -267,24 +267,8 @@ describe('cupcake', () => {
         userInfo: userInfoPDA,
       })
       .remainingAccounts([
-        // Base transfer accounts
         { pubkey: token, isWritable: true, isSigner: false },
         { pubkey: userATA, isWritable: true, isSigner: false },
-
-        // Bakery auth
-        /*{ pubkey: admin.publicKey, isWritable: false, isSigner: false },
-
-        // Mint
-        { pubkey: tokenMint, isWritable: false, isSigner: false },
-
-        // Metadata + edition
-        { pubkey: metadataPDA, isWritable: true, isSigner: false },
-        { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
-
-        // Programs / Sysvars
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
-        { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },
-        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },*/
       ])
       .preInstructions([
         createAssociatedTokenAccountInstruction(
@@ -320,7 +304,7 @@ describe('cupcake', () => {
 
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
-    const tokenRecordPDA = getTokenRecordPDA(tokenMint, admin.publicKey)
+    const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
 
     // Create the Create instruction.
     const createCreateIx = createCreateInstruction(
@@ -382,18 +366,23 @@ describe('cupcake', () => {
     )
 
     // Pack both instructions into a transaction and send/confirm it.
-    try {
     const txn = new anchor.web3.Transaction().add(createCreateIx, createMintIx);
     txn.recentBlockhash = (await cupcakeProgram.provider.connection.getRecentBlockhash()).blockhash;
     txn.feePayer = cupcakeProgram.provider.wallet.publicKey;
     const signedTxn = await cupcakeProgram.provider.wallet.signTransaction(txn);
     const txHash = (await cupcakeProgram.provider.sendAll([{ tx: signedTxn, signers: [admin] }]))[0];
     console.log(txHash)
-    }catch(e){console.warn(e)}
+
+    const tokenRecordInfo = await TokenRecord.fromAccountAddress(cupcakeProgram.provider.connection, tokenRecordPDA)
+    const tokenInfo = await getAccount(cupcakeProgram.provider.connection, token)
+    console.log(tokenRecordInfo, tokenInfo)
+
   });
 
   it('Should bake a new Programmable_Refillable1Of1 Sprinkle', async () => {
-    try{
+    const metadataPDA = getMetadataPDA(tokenMint)
+    const masterEditionPDA = getMasterEditionPDA(tokenMint)
+    const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
     const tx = await cupcakeProgram.methods
       .addOrRefillTag({
         uid: sprinkle2UID,
@@ -402,7 +391,7 @@ describe('cupcake', () => {
         minterPays: false,
         pricePerMint: null,
         whitelistBurn: false,
-        tagType: { refillable1Of1: true }
+        tagType: { programmableUnique: true }
       } as any)
       .accounts({
         authority: admin.publicKey,
@@ -414,17 +403,27 @@ describe('cupcake', () => {
       .remainingAccounts([
         { pubkey: tokenMint, isWritable: false, isSigner: false },
         { pubkey: token, isWritable: true, isSigner: false },
+        { pubkey: metadataPDA, isWritable: true, isSigner: false },
+        { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
+        { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
+        { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },
+        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
       ])
       .signers([admin])
       .rpc()
     console.log('Your transaction signature', tx);
-    }catch(e){console.warn(e)}
+
+    const tokenRecordInfo = await TokenRecord.fromAccountAddress(cupcakeProgram.provider.connection, tokenRecordPDA)
+    const tokenInfo = await getAccount(cupcakeProgram.provider.connection, token)
+    console.log(tokenRecordInfo, tokenInfo)
   });
 
   it('Should claim the Programmable_Refillable1Of1 Sprinkle', async () => {
     const userATA = await getAssociatedTokenAddress(tokenMint, user.publicKey)
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
+    const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
+    const destinationTokenRecordPDA = getTokenRecordPDA(tokenMint, userATA)
     try {
     const tx = await cupcakeProgram.methods
       .claimTag(0)
@@ -448,6 +447,9 @@ describe('cupcake', () => {
         // Metadata + edition
         { pubkey: metadataPDA, isWritable: true, isSigner: false },
         { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
+        // Record + destination record
+        { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
+        { pubkey: destinationTokenRecordPDA, isWritable: true, isSigner: false },
         // Programs / Sysvars
         { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },

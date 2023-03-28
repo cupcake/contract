@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::Instruction;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{config::*, tag::*};
@@ -329,23 +330,60 @@ pub fn handler<'a, 'b, 'c, 'info>(
       TagType::ProgrammableUnique => {
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
+          let token_metadata = &ctx.remaining_accounts[2];
+          let token_edition = &ctx.remaining_accounts[3];
+          let token_record = &ctx.remaining_accounts[4];
+          let token_metadata_program = &ctx.remaining_accounts[5];
+          let instructions_sysvar = &ctx.remaining_accounts[6];
 
-          // Check that the provided ATA is legitimate.
-          assert_is_ata(
-              token,
-              &ctx.accounts.config.authority.key(),
-              &token_mint.key(),
-              Some(&ctx.accounts.config.key()),
+          let account_metas = vec![
+              AccountMeta::new_readonly(token_metadata_program.key(), false),
+              AccountMeta::new_readonly(config.key(), false),
+              AccountMeta::new(token_metadata.key(), false),
+              AccountMeta::new_readonly(token_edition.key(), false),
+              AccountMeta::new(token_record.key(), false),
+              AccountMeta::new_readonly(token_mint.key(), false),
+              AccountMeta::new(token.key(), false),
+              AccountMeta::new_readonly(ctx.accounts.authority.key(), true),
+              AccountMeta::new_readonly(ctx.accounts.payer.key(), true),
+              AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+              AccountMeta::new_readonly(instructions_sysvar.key(), false),
+              AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+              AccountMeta::new_readonly(token_metadata_program.key(), false),
+              AccountMeta::new_readonly(token_metadata_program.key(), false),
+          ];
+          let account_infos = [
+              token_metadata_program.clone(),
+              config.to_account_info(),
+              token_metadata.clone(),
+              token_edition.clone(),
+              token_record.clone(),
+              token_mint.clone(),
+              token.clone(),
+              ctx.accounts.authority.to_account_info(),
+              ctx.accounts.payer.to_account_info(),
+              ctx.accounts.system_program.to_account_info(),
+              instructions_sysvar.clone(),
+              ctx.accounts.token_program.to_account_info(),
+              token_metadata_program.clone(),
+              token_metadata_program.clone()
+          ];
+          let real_data = 
+              mpl_token_metadata::instruction::MetadataInstruction::Delegate(
+                  mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
+                      amount: 1, 
+                      authorization_data: None 
+                  }
+              );
+          invoke_signed(
+              &Instruction {  
+                  program_id: token_metadata_program.key(),
+                  accounts: account_metas,
+                  data: real_data.try_to_vec().unwrap(),
+              }, 
+              &account_infos,
+              &[&config_seeds[..]],
           )?;
-
-          let cpi_accounts = Approve {
-              to: token.clone(),
-              delegate: ctx.accounts.config.to_account_info(),
-              authority: ctx.accounts.authority.to_account_info(),
-          };
-          let context = 
-              CpiContext::new(token_program.to_account_info(), cpi_accounts);
-          approve(context, total_supply)?;
 
           token_mint.key()
       }
