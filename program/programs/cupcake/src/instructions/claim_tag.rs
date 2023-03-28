@@ -70,49 +70,57 @@ pub struct ClaimTag<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-// Remaining accounts - if doing a wallet fungible or a 1/1, pass:
-    // token (w) - ata of token_mint type owned by config authority wallet
-    // user_ata (w) - ata of token_mint type for user
+// Remaining accounts - 
+    // SingleUse1Of1, Refillable1Of1, WalletRestrictedFungible:
+        // token (w) - ata of token_mint type owned by config authority wallet
+        // user_ata (w) - ata of token_mint type for user
     //
-    // If doing hot potato:
-    // token (w) - current location of token (as set in tag field)
-    // user_token_account (w) - token account with seed [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref(), tag.token_mint.to_le_bytes()]
-    // will be initialized if not setup.
-    // edition - existing edition of current token_mint
-    // token_mint - token mint on the tag
-    // token_metadata_program - token mint on the tag
+     // Programmable:
+        // token (w) - ata of token_mint type owned by config authority wallet
+        // user_ata (w) - ata of token_mint type for user
+        // token_metadata - Metadata account for the token
+        // token_edition - Edition account for the token
+        // associated_token_program - MPL Token Metadata Program
     //
-    // If doing a minting from master edition, pass:
-    // token_mint - token mint on the tag
-    // token (w) - ata of config authority containing the token
-    // new_token_mint (w) - new token mint, must be supply = 1, decimals = 0
-    // new_metadata (w) - precomputed new metadata key(will be set by inner CPI here)
-    // new_edition (w) - precomputed new edition key
-    // metadata - existing metadata of current token_mint
-    // master_edition (w) - existing master edition of current token_mint
-    // edition_mark_pda (w) - What edition page this edition you are trying to mint is on
-    // new_mint_authority (s) - Authority of new mint
-    // update_authority - Authority of metadata
-    // token_metadata_program
+    // HotPotato:
+        // token (w) - current location of token (as set in tag field)
+        // user_token_account (w) - token account with seed [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref(), tag.token_mint.to_le_bytes()]
+        // will be initialized if not setup.
+        // edition - existing edition of current token_mint
+        // token_mint - token mint on the tag
+        // token_metadata_program - token mint on the tag
     //
-    // If using candy machine, pass:
-    // candy_machine_id (w)
-    // candy_machine_creator (pda of candy_machine [PREFIX.as_bytes(), candy_machine.key().as_ref()])
-    // new_token_mint (w) - new token mint, must be supply = 1, decimals = 0
-    // new_metadata (w) - precomputed new metadata key(will be set by inner CPI here)
-    // new_edition (w) - precomputed new edition key
-    // new_mint_authority (s) - authority for freeze and mint on the mint object.
-    // token_metadata_program
-    // cmv2 program
-    // clock sysvar
-    // recent_slothashes
-    // instruction_sysvar_account
-    // > Only needed if candy machine has whitelist_mint_settings
-    // whitelist_token_account (w) - either configs or yours depending on who pays
-    // > Only needed if candy machine has whitelist_mint_settings and mode is BurnEveryTime
-    // whitelist_token_mint (w)
-    // > Only needed if candy machine has token mint
-    // token_account_info (w) - either configs or yours depending on who pays
+    // LimitedOrOpenEdition:
+        // token_mint - token mint on the tag
+        // token (w) - ata of config authority containing the token
+        // new_token_mint (w) - new token mint, must be supply = 1, decimals = 0
+        // new_metadata (w) - precomputed new metadata key(will be set by inner CPI here)
+        // new_edition (w) - precomputed new edition key
+        // metadata - existing metadata of current token_mint
+        // master_edition (w) - existing master edition of current token_mint
+        // edition_mark_pda (w) - What edition page this edition you are trying to mint is on
+        // new_mint_authority (s) - Authority of new mint
+        // update_authority - Authority of metadata
+        // token_metadata_program
+    //
+    // CandyMachineDrop:
+        // candy_machine_id (w)
+        // candy_machine_creator (pda of candy_machine [PREFIX.as_bytes(), candy_machine.key().as_ref()])
+        // new_token_mint (w) - new token mint, must be supply = 1, decimals = 0
+        // new_metadata (w) - precomputed new metadata key(will be set by inner CPI here)
+        // new_edition (w) - precomputed new edition key
+        // new_mint_authority (s) - authority for freeze and mint on the mint object.
+        // token_metadata_program
+        // cmv2 program
+        // clock sysvar
+        // recent_slothashes
+        // instruction_sysvar_account
+        // > Only needed if candy machine has whitelist_mint_settings
+        // whitelist_token_account (w) - either configs or yours depending on who pays
+        // > Only needed if candy machine has whitelist_mint_settings and mode is BurnEveryTime
+        // whitelist_token_mint (w)
+        // > Only needed if candy machine has token mint
+        // token_account_info (w) - either configs or yours depending on who pays
 
 pub fn handler<'a, 'b, 'c, 'info>(
   ctx: Context<'a, 'b, 'c, 'info, ClaimTag<'info>>,
@@ -370,10 +378,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
             match tag_type {
                 // If the token is a pNFT, we have to use the TokenMetadataProgram transfer.
                 TagType::Programmable => {
+                    let _token_metadata = &ctx.remaining_accounts[2];
+                    let _token_edition = &ctx.remaining_accounts[3];
+                    let _associated_token_program = &ctx.remaining_accounts[4];
                     msg!("programmable")
                 },
 
-                // Otherwise, use the normal TokenProgram transfer.
+                // Otherwise, we can use the normal TokenProgram transfer.
                 _ => {
                     let cpi_accounts = Transfer {
                         from: token.clone(),
