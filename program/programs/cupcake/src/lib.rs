@@ -9,9 +9,6 @@ use instructions::*;
 
 declare_id!("cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE");
 
-/// String used as the first seed for all Cupcake Protocol PDAs.
-pub const PREFIX: &[u8] = b"cupcake";
-
 #[program]
 pub mod cupcake {
 
@@ -19,7 +16,7 @@ pub mod cupcake {
 
     /// Create a new Bakery, managed by a provided account.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        instructions::initialize::handler(ctx)
+        instructions::create_bakery::handler(ctx)
     }
 
     /// Create a new Sprinkle for a Bakery, or update an existing one.
@@ -28,7 +25,7 @@ pub mod cupcake {
         ctx: Context<'a, 'b, 'c, 'info, AddOrRefillTag<'info>>,
         tag_params: AddOrRefillTagParams,
     ) -> Result<()> {
-        instructions::add_or_refill_tag::handler(ctx, tag_params)
+        instructions::bake_sprinkle::handler(ctx, tag_params)
     }
 
     /// Execute the claim method of a Sprinkle for a provided account.
@@ -37,6 +34,6 @@ pub mod cupcake {
         ctx: Context<'a, 'b, 'c, 'info, ClaimTag<'info>>,
         creator_bump: u8,
     ) -> Result<()> {
-        instructions::claim_tag::handler(ctx, creator_bump)
+        instructions::claim_sprinkle::handler(ctx, creator_bump)
     }
 }

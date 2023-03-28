@@ -1,7 +1,7 @@
-pub mod add_or_refill_tag;
-pub mod claim_tag;
-pub mod initialize;
+pub mod bake_sprinkle;
+pub mod claim_sprinkle;
+pub mod create_bakery;
 
-pub use add_or_refill_tag::*;
-pub use claim_tag::*;
-pub use initialize::*;
+pub use bake_sprinkle::*;
+pub use claim_sprinkle::*;
+pub use create_bakery::*;

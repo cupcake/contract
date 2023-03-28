@@ -10,7 +10,7 @@ use mpl_token_metadata::instruction::{
     mint_new_edition_from_master_edition_via_token
 };
 use crate::errors::ErrorCode;
-use crate::PREFIX;
+use crate::state::PDA_PREFIX;
 use crate::state::{config::*, tag::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
@@ -49,7 +49,7 @@ pub struct ClaimTag<'info> {
     #[account(mut, 
               has_one = tag_authority,
               seeds = [
-                  PREFIX, 
+                  PDA_PREFIX, 
                   config.authority.key().as_ref(), 
                   &tag.uid.to_le_bytes()
               ], 
@@ -61,7 +61,7 @@ pub struct ClaimTag<'info> {
               payer = payer,
               space = UserInfo::SIZE, 
               seeds = [
-                  PREFIX, 
+                  PDA_PREFIX, 
                   config.authority.as_ref(), 
                   &tag.uid.to_le_bytes(), 
                   user.key().as_ref()
@@ -143,7 +143,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let payer = &ctx.accounts.payer;
     let user_info = &ctx.accounts.user_info;
     let user = &ctx.accounts.user;
-    let config_seeds = &[&PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
+    let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
 
     // Ensure the Sprinkle's total_supply value has not already been reached.
     // HotPotatos have no claim limits, so they are excluded from this check.
@@ -171,6 +171,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let mut amount_to_claim = 1;
 
     match tag_type {
+        TagType::ProgrammableUnique => todo!(),
         TagType::LimitedOrOpenEdition => {
             let token_mint = &ctx.remaining_accounts[0];
             let token = &ctx.remaining_accounts[1];
@@ -497,7 +498,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             // Initialize a new account, to be used as an ATA.
             let user_key = user.key();
             let signer_seeds = &[
-                PREFIX,
+                PDA_PREFIX,
                 config.authority.as_ref(),
                 &tag.uid.to_le_bytes(),
                 user_key.as_ref(),

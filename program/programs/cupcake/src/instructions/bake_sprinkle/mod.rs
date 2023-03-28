@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
-use crate::PREFIX;
+use crate::state::PDA_PREFIX;
 use crate::state::{config::*, tag::*};
 use crate::utils::{assert_is_ata, assert_keys_equal};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
@@ -47,7 +47,7 @@ pub struct AddOrRefillTag<'info> {
     #[account(mut, 
               has_one = authority,
               seeds = [
-                  PREFIX, 
+                  PDA_PREFIX, 
                   authority.key().as_ref()
               ], 
               bump = config.bump)]
@@ -63,7 +63,7 @@ pub struct AddOrRefillTag<'info> {
               payer = payer, 
               space = Tag::SIZE,
               seeds = [
-                  PREFIX, 
+                  PDA_PREFIX, 
                   authority.key().as_ref(), 
                   &tag_params.uid.to_le_bytes()
               ], 
@@ -109,7 +109,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
   let minter_pays = tag_params.minter_pays;
   let tag = &mut ctx.accounts.tag;
   let config = &ctx.accounts.config;
-  let config_seeds = &[&PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
+  let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
 
   // If a Sprinkle is immutable, it can not be re-baked.
   // Currently, this is only the SingleUse1Of1 type.
@@ -323,6 +323,30 @@ pub fn handler<'a, 'b, 'c, 'info>(
           // Verify that the provided token mint is legitimate.
           let token_mint = &ctx.remaining_accounts[0];
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
+          token_mint.key()
+      }
+
+      TagType::ProgrammableUnique => {
+          let token_mint = &ctx.remaining_accounts[0];
+          let token = &ctx.remaining_accounts[1];
+
+          // Check that the provided ATA is legitimate.
+          assert_is_ata(
+              token,
+              &ctx.accounts.config.authority.key(),
+              &token_mint.key(),
+              Some(&ctx.accounts.config.key()),
+          )?;
+
+          let cpi_accounts = Approve {
+              to: token.clone(),
+              delegate: ctx.accounts.config.to_account_info(),
+              authority: ctx.accounts.authority.to_account_info(),
+          };
+          let context = 
+              CpiContext::new(token_program.to_account_info(), cpi_accounts);
+          approve(context, total_supply)?;
+
           token_mint.key()
       }
   };

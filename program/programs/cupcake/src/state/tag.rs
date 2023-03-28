@@ -21,6 +21,9 @@ pub enum TagType {
 
     /// Passes a single frozen NFT between claimers.
     HotPotato,
+
+    /// Acts as a Refillable1Of1 for ProgrammableNonFungible tokens (pNFTs)
+    ProgrammableUnique,
 }
 
 /// PDA created for each Sprinkle.

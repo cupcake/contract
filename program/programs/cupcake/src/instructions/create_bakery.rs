@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::PREFIX;
-use crate::state::config::*;
+use crate::state::{PDA_PREFIX, config::*};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -17,7 +16,7 @@ pub struct Initialize<'info> {
               payer = payer, 
               space =  Config::SIZE,
               seeds = [
-                  PREFIX, 
+                  PDA_PREFIX, 
                   authority.key().as_ref()
               ], 
               bump)]
