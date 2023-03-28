@@ -225,7 +225,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let new_mint_authority = &ctx.remaining_accounts[6];
             let token_metadata_program = &ctx.remaining_accounts[7];
             let candy_machine_program = &ctx.remaining_accounts[8];
-            // these three are enforced by inner contract, no need to check
+
+            // These three are enforced by inner contract, no need to check
             let clock = &ctx.remaining_accounts[9];
             let recent_slothashes = &ctx.remaining_accounts[10];
             let instruction_sysvar_account = &ctx.remaining_accounts[11];
@@ -236,6 +237,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 Pubkey::from_str("DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9").unwrap(),
             )?;
 
+            // Begin assembling the list of account metas for CandyMachine CPIs.
             let mut ctr = 12;
             let mut keys = vec![
                 AccountMeta::new(candy_machine_id.key(), false),
@@ -381,7 +383,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let token_mint = &ctx.remaining_accounts[3];
             let token_metadata_program = &ctx.remaining_accounts[4];
 
-            //
+            // Ensure the provided Token Metadata Program, and token accounts are legitimate.
             assert_keys_equal(
                 token_metadata_program.key(),
                 Pubkey::from_str(METADATA_PROGRAM_ID).unwrap(),
@@ -389,6 +391,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             assert_keys_equal(token.key(), tag.current_token_location)?;
             assert_keys_equal(token_mint.key(), tag.token_mint)?;
 
+            // Initialize a new account, to be used as an ATA.
             let user_key = user.key();
             let signer_seeds = &[
                 PREFIX,
@@ -408,18 +411,19 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 signer_seeds,
             )?;
 
+            // Initialize the new account into an ATA for the user and the HotPotato token.
             let cpi_accounts = InitializeAccount {
                 authority: config.to_account_info(),
                 account: user_token_account.to_account_info(),
                 mint: token_mint.to_account_info(),
                 rent: ctx.accounts.rent.to_account_info(),
             };
-
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             initialize_account(context)?;
 
+            // Before we can transfer the frozen HotPotato 
+            // token to the new claimer, we need to thaw it.
             invoke_signed(
                 &thaw_delegated_account(
                     token_metadata_program.key(),
@@ -438,6 +442,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 &[&config_seeds[..]],
             )?;
 
+            // Now that the HotPotato token is thawed,
+            // the BakeryPDA can transfer it freely.
             let cpi_accounts = Transfer {
                 from: token.clone(),
                 to: user_token_account.clone(),
@@ -445,27 +451,26 @@ pub fn handler<'a, 'b, 'c, 'info>(
             };
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             transfer(context.with_signer(&[&config_seeds[..]]), 1)?;
 
+            // Set the new ATA's owner authority to the BakeryPDA.
             let cpi_accounts = SetAuthority {
                 current_authority: config.to_account_info(),
                 account_or_mint: user_token_account.clone(),
             };
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             set_authority(
                 context.with_signer(&[&config_seeds[..]]),
                 spl_token::instruction::AuthorityType::AccountOwner,
                 Some(user.key()),
             )?;
 
+            // Set the new ATA's close authority to the BakeryPDA.
             let cpi_accounts = SetAuthority {
                 current_authority: user.to_account_info(),
                 account_or_mint: user_token_account.clone(),
             };
-
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
             set_authority(
@@ -474,6 +479,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 Some(config.key()),
             )?;
 
+            // Delegate the new ATA to the BakeryPDA.
             let cpi_accounts = Approve {
                 to: user_token_account.clone(),
                 delegate: config.to_account_info(),
@@ -481,9 +487,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
             };
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             approve(context, 1)?;
 
+            // With the HotPotato token transferred to the new ATA,
+            // we can safely close the previous ATA and reclaim the rent.
             let cpi_accounts = CloseAccount {
                 account: token.clone(),
                 destination: payer.to_account_info(),
@@ -491,11 +498,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
             };
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             close_account(context.with_signer(&[&config_seeds[..]]))?;
 
+            // Update current_token_location to reflect the new ATA in the Sprinkle's state.
             tag.current_token_location = user_token_account.key();
 
+            // Finish by freezing the HotPotato token inside the new ATA.
             invoke_signed(
                 &freeze_delegated_account(
                     token_metadata_program.key(),
