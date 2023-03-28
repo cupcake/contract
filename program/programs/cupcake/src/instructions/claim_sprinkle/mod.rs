@@ -11,7 +11,7 @@ use mpl_token_metadata::instruction::{
 };
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
-use crate::state::{config::*, tag::*, user_info::*};
+use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     create_or_allocate_account_raw, 
@@ -404,6 +404,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   let token_metadata_program = &ctx.remaining_accounts[9];
                   let instructions_sysvar = &ctx.remaining_accounts[10];
 
+                  // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
+                  // which wraps the normal TokenProgram Transfer call.
                   let account_metas = vec![
                       AccountMeta::new(token.key(), false),
                       AccountMeta::new_readonly(bakery_authority.key(), false),

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{PDA_PREFIX, config::*};
+use crate::state::{PDA_PREFIX, bakery::*};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -35,8 +35,5 @@ pub fn handler<'a, 'b, 'c, 'info>(ctx: Context<Initialize<'info>>) -> Result<()>
     ctx.accounts.config.authority = *ctx.accounts.authority.to_account_info().key;
     ctx.accounts.config.bump = *ctx.bumps.get("config").unwrap();
 
-    // We could expand this in the future to store more info, such as a
-    // total sprinkle counter, but for now it exists just to transfer
-    // tokens as a delegate.
     Ok(())
 }

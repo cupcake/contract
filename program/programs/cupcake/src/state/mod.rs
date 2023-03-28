@@ -1,9 +1,9 @@
-pub mod config;
-pub mod tag;
+pub mod bakery;
+pub mod sprinkle;
 pub mod user_info;
 
-pub use config::*;
-pub use tag::*;
+pub use bakery::*;
+pub use sprinkle::*;
 pub use user_info::*;
 
 /// String used as the first seed for all Cupcake Protocol PDAs.

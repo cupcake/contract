@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
-use crate::state::{config::*, tag::*};
+use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{assert_is_ata, assert_keys_equal};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
@@ -336,6 +336,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let token_metadata_program = &ctx.remaining_accounts[5];
           let instructions_sysvar = &ctx.remaining_accounts[6];
 
+          // TODO: validation
+
+          // We need to CPI to TokenMetadataProgram to call Delegate for pNFTs, 
+          // which wraps the normal TokenProgram Approve call.
           let account_metas = vec![
               AccountMeta::new_readonly(token_metadata_program.key(), false),
               AccountMeta::new_readonly(config.key(), false),
@@ -368,7 +372,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
               token_metadata_program.clone(),
               token_metadata_program.clone()
           ];
-          let real_data = 
+          let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(
                   mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
                       amount: 1, 
@@ -379,7 +383,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
               &Instruction {  
                   program_id: token_metadata_program.key(),
                   accounts: account_metas,
-                  data: real_data.try_to_vec().unwrap(),
+                  data: ix_data.try_to_vec().unwrap(),
               }, 
               &account_infos,
               &[&config_seeds[..]],
