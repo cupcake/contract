@@ -331,7 +331,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
         TagType::WalletRestrictedFungible
         | TagType::Refillable1Of1
-        | TagType::SingleUse1Of1 => {
+        | TagType::SingleUse1Of1 
+        | TagType::Programmable => {
             let token = &ctx.remaining_accounts[0];
             let user_ata = &ctx.remaining_accounts[1];
 
@@ -365,15 +366,25 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     .ok_or(ErrorCode::NumericalOverflowError)?,
             );
 
-            // Transfer the calculated amount of tokens to the claimer from the Bakery wallet.
-            let cpi_accounts = Transfer {
-                from: token.clone(),
-                to: user_ata.clone(),
-                authority: ctx.accounts.config.to_account_info(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            transfer(context.with_signer(&[&config_seeds[..]]), amount_to_claim)?;
+            // Transfer the token associated with this Sprinkle to the claimer.
+            match tag_type {
+                // If the token is a pNFT, we have to use the TokenMetadataProgram transfer.
+                TagType::Programmable => {
+                    msg!("programmable")
+                },
+
+                // Otherwise, use the normal TokenProgram transfer.
+                _ => {
+                    let cpi_accounts = Transfer {
+                        from: token.clone(),
+                        to: user_ata.clone(),
+                        authority: ctx.accounts.config.to_account_info(),
+                    };
+                    let context = CpiContext::new(
+                        ctx.accounts.token_program.to_account_info(), cpi_accounts);
+                    transfer(context.with_signer(&[&config_seeds[..]]), amount_to_claim)?;
+                }
+            }
         }
 
         TagType::HotPotato => {

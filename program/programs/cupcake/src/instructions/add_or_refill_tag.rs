@@ -146,7 +146,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
       TagType::SingleUse1Of1
       | TagType::Refillable1Of1
       | TagType::WalletRestrictedFungible
-      | TagType::HotPotato => {
+      | TagType::HotPotato
+      | TagType::Programmable => {
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
 
@@ -203,7 +204,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       current_authority: ctx.accounts.authority.to_account_info(),
                       account_or_mint: token.clone(),
                   };
-
                   let context = CpiContext::new(
                       ctx.accounts.token_program.to_account_info(),
                       cpi_accounts,
