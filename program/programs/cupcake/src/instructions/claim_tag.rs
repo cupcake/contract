@@ -4,6 +4,7 @@ use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::program::{invoke_signed, invoke};
 use anchor_lang::solana_program::system_program;
 use anchor_spl::token::{self, Token};
+use mpl_token_metadata;
 use mpl_token_metadata::instruction::{
     thaw_delegated_account, freeze_delegated_account, 
     mint_new_edition_from_master_edition_via_token
@@ -82,13 +83,14 @@ pub struct ClaimTag<'info> {
     // SingleUse1Of1, Refillable1Of1, WalletRestrictedFungible:
         // token (w) - ata of token_mint type owned by config authority wallet
         // user_ata (w) - ata of token_mint type for user
-    //
-     // Programmable:
-        // token (w) - ata of token_mint type owned by config authority wallet
-        // user_ata (w) - ata of token_mint type for user
-        // token_metadata - Metadata account for the token
-        // token_edition - Edition account for the token
-        // associated_token_program - MPL Token Metadata Program
+        // If the underlying asset is Programmable, also:
+            // bakery_auth
+            // token_mint
+            // token_metadata - Metadata account for the token
+            // token_edition - Edition account for the token
+            // token_metadata_program
+            // associated_token_program - MPL Token Metadata Program
+            // instructions_sysvar
     //
     // HotPotato:
         // token (w) - current location of token (as set in tag field)
@@ -410,23 +412,68 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 _ => {
                     msg!("programmable");
 
-                    // If more than 5 accounts are passed, just ignore the extras.
-                    let _token_metadata = &ctx.remaining_accounts[2];
-                    let _token_edition = &ctx.remaining_accounts[3];
-                    let _associated_token_program = &ctx.remaining_accounts[4];
+                    // If more than 7 accounts are passed, just ignore the extras.
+                    let bakery_authority = &ctx.remaining_accounts[2];
+                    let token_mint = &ctx.remaining_accounts[3];
+                    let token_metadata = &ctx.remaining_accounts[4];
+                    let token_edition = &ctx.remaining_accounts[5];
+                    let associated_token_program = &ctx.remaining_accounts[6];
+                    let token_metadata_program = &ctx.remaining_accounts[7];
+                    let instructions_sysvar = &ctx.remaining_accounts[8];
 
-                    let cpi_accounts = token::Transfer {
-                      from: token.clone(),
-                      to: user_ata.clone(),
-                      authority: ctx.accounts.config.to_account_info(),
-                    };
-                    let context = CpiContext::new(
-                        ctx.accounts.token_program.to_account_info(), 
-                        cpi_accounts
-                    );
-                    token::transfer(
-                        context.with_signer(&[&config_seeds[..]]), 
-                        amount_to_claim
+                    let account_metas = vec![
+                        AccountMeta::new(token.key(), false),
+                        AccountMeta::new_readonly(bakery_authority.key(), false),
+                        AccountMeta::new(user_ata.key(), false),
+                        AccountMeta::new_readonly(user.key(), false),
+                        AccountMeta::new_readonly(token_mint.key(), false),
+                        AccountMeta::new(token_metadata.key(), false),
+                        AccountMeta::new(token_edition.key(), false),
+                        AccountMeta::new_readonly(token_metadata_program.key(), false),
+                        AccountMeta::new_readonly(token_metadata_program.key(), false),
+                        AccountMeta::new_readonly(config.key(), true),
+                        AccountMeta::new(payer.key(), true),
+                        AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                        AccountMeta::new_readonly(instructions_sysvar.key(), false),
+                        AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+                        AccountMeta::new_readonly(associated_token_program.key(), false),
+                        AccountMeta::new_readonly(token_metadata_program.key(), false),
+                        AccountMeta::new_readonly(token_metadata_program.key(), false),
+                    ];
+                    let account_infos = [
+                        token.clone(),
+                        bakery_authority.to_account_info(),
+                        user_ata.clone(),
+                        user.to_account_info(),
+                        token_mint.clone(),
+                        token_metadata.clone(),
+                        token_edition.clone(),
+                        token_metadata_program.clone(),
+                        token_metadata_program.clone(),
+                        config.to_account_info(),
+                        payer.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                        instructions_sysvar.clone(),
+                        ctx.accounts.token_program.to_account_info(),
+                        associated_token_program.clone(),
+                        token_metadata_program.clone(),
+                        token_metadata_program.clone(),
+                    ];
+                    let real_data = 
+                        mpl_token_metadata::instruction::MetadataInstruction::Transfer(
+                          mpl_token_metadata::instruction::TransferArgs::V1 { 
+                              amount: 1, 
+                              authorization_data: None 
+                          }
+                        );
+                    invoke_signed(
+                        &Instruction {  
+                            program_id: token_metadata_program.key(),
+                            accounts: account_metas,
+                            data: real_data.try_to_vec().unwrap(),
+                        }, 
+                        &account_infos,
+                        &[&config_seeds[..]],
                     )?
                 }
             };
