@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
-use crate::{PREFIX, METADATA_PROGRAM_ID};
+use crate::PREFIX;
 use crate::state::{config::*, tag::*};
 use crate::utils::{assert_is_ata, assert_keys_equal};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
+use mpl_token_metadata;
 use mpl_token_metadata::instruction::freeze_delegated_account;
-use std::str::FromStr;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct AddOrRefillTagParams {
@@ -194,7 +194,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
               // Ensure the provided TokenMetadataProgramId is legitimate.
               assert_keys_equal(
                   token_metadata_program.key(),
-                  Pubkey::from_str(METADATA_PROGRAM_ID).unwrap(),
+                  mpl_token_metadata::ID,
               )?;
 
               // If the token isn't already frozen, freeze it now.

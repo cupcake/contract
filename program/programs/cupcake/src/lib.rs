@@ -12,9 +12,6 @@ declare_id!("cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE");
 /// String used as the first seed for all Cupcake Protocol PDAs.
 pub const PREFIX: &[u8] = b"cupcake";
 
-/// Address for the Metaplex Token Metadata Program.
-pub const METADATA_PROGRAM_ID: &str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
-
 #[program]
 pub mod cupcake {
 
