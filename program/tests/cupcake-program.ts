@@ -106,7 +106,7 @@ describe('cupcake', () => {
     );
   });
 
-  it('Should bake a new Sprinkle', async () => {
+  it('Should bake a new Refillable1Of1 Sprinkle', async () => {
     const tx = await cupcakeProgram.methods
       .addOrRefillTag({
         uid: sprinkleUID,
@@ -133,7 +133,7 @@ describe('cupcake', () => {
     console.log('Your transaction signature', tx);
   });
 
-  it('Should claim the Sprinkle', async () => {
+  it('Should claim the Refillable1Of1 Sprinkle', async () => {
     const userATA = await getAssociatedTokenAddress(tokenMint, user.publicKey)
     const tx = await cupcakeProgram.methods
       .claimTag(0)

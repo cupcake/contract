@@ -111,14 +111,20 @@ pub fn handler<'a, 'b, 'c, 'info>(
   let config = &ctx.accounts.config;
   let config_seeds = &[&PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
 
+  // If a Sprinkle is immutable, it can not be re-baked.
+  // Currently, this is only the SingleUse1Of1 type.
   require!(
-      // require that if tag has been made before, this action isnt called on a single use kind of tag
       tag.uid == 0 || tag.tag_type != TagType::SingleUse1Of1,
       ErrorCode::SingleUseIsImmutable
   );
 
+  // Determine the total_supply of the new or updated Sprinkle.
   let total_supply = match tag_type {
+      // SingleUse1Of1s and HotPotatos can only have a total_supply of 1.
       TagType::SingleUse1Of1 | TagType::HotPotato => 1,
+
+      // Increment total_supply for Refillable1Of1s, if 
+      // they are being re-baked with a new token.
       TagType::Refillable1Of1 => {
           if ctx.remaining_accounts[0].key() != tag.token_mint
               && tag.num_claimed == tag.total_supply
@@ -130,9 +136,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
               tag.total_supply
           }
       }
+
+      // For all other cases, accept the user-provided value.
       _ => tag_params.num_claims,
   };
 
+  // Handle the delegation / authorization changes needed to enable Sprinkle claims.
   let token_mint = match tag_type {
       TagType::SingleUse1Of1
       | TagType::Refillable1Of1
@@ -141,6 +150,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
 
+          // Check that the provided ATA is legitimate.
           assert_is_ata(
               token,
               &ctx.accounts.config.authority.key(),
@@ -148,10 +158,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
               Some(&ctx.accounts.config.key()),
           )?;
 
-          // Check that its a real mint
+          // Check that the provided token is legitimate.
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
           let token_account: Account<TokenAccount> = Account::try_from(token)?;
 
+          // If the Sprinkle is not a HotPotato, or if the
+          // provided HotPotato token is not yet frozen,
+          // delegate it to the BakeryPDA.
           if tag_type != TagType::HotPotato
               || token_account.state != spl_token::state::AccountState::Frozen
           {
@@ -161,10 +174,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   authority: ctx.accounts.authority.to_account_info(),
               };
               let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
-
               approve(context, total_supply)?;
           }
 
+          // If the Sprinkle is a HotPotato, ensure that it is either a new Sprinkle,
+          // or that the frozen token is still in the Bakery wallet.
           if tag_type == TagType::HotPotato {
               require!(
                   tag.uid == 0
@@ -177,11 +191,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
               let edition = &ctx.remaining_accounts[2];
               let token_metadata_program = &ctx.remaining_accounts[3];
 
+              // Ensure the provided TokenMetadataProgramId is legitimate.
               assert_keys_equal(
                   token_metadata_program.key(),
                   Pubkey::from_str(METADATA_PROGRAM_ID).unwrap(),
               )?;
 
+              // If the token isn't already frozen, freeze it now.
               if token_account.state != spl_token::state::AccountState::Frozen {
                   let cpi_accounts = SetAuthority {
                       current_authority: ctx.accounts.authority.to_account_info(),
@@ -219,6 +235,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
           token_mint.key()
       }
+
       TagType::CandyMachineDrop => {
           let candy_machine = &ctx.remaining_accounts[0];
           let whitelist_mint = &ctx.remaining_accounts[1];
@@ -226,36 +243,37 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let payment_token_mint = &ctx.remaining_accounts[3];
           let payment_token = &ctx.remaining_accounts[4];
 
+          // If the CandyMachine is whitelisted, and minter_pays is false,
+          // ensure the Bakery has an ATA for the whitelist token.
           require!(
-              // if WL present, you need to provide a payment account for it
-              // or say minter is doing it
               whitelist_mint.key() == system_program::ID
                   || whitelist_token.key() != system_program::ID
                   || minter_pays,
               ErrorCode::MustProvideWhitelistTokenIfMinterIsNotProvidingIt
           );
 
+          // If the CandyMachine required payment for mints, the payment
+          // token is not native SOL, and minter_pays is false,
+          // ensure the Bakery has an ATA for the payment token.
           require!(
-              // if payment token mint is an actual mint, and you are not providing
-              // a payment account for it, you need to say minter is paying both
               payment_token_mint.key() == system_program::ID
                   || payment_token.key() != system_program::ID
                   || minter_pays,
               ErrorCode::MustProvidePaymentAccountIfMinterIsNotProviding
           );
 
+          // Verify that the provided whitelist token accounts
+          // are legitimate, then delegate them to the Bakery PDA. 
           if whitelist_mint.key() != system_program::ID
               && whitelist_token.key() != system_program::ID
           {
               let _wl_mint: Account<Mint> = Account::try_from(&whitelist_mint)?;
-
               assert_is_ata(
                   &whitelist_token,
                   &ctx.accounts.config.authority.key(),
                   &whitelist_mint.key(),
                   Some(&ctx.accounts.config.key()),
               )?;
-
               let cpi_accounts = Approve {
                   to: whitelist_token.clone(),
                   delegate: ctx.accounts.config.to_account_info(),
@@ -265,19 +283,18 @@ pub fn handler<'a, 'b, 'c, 'info>(
               approve(context, total_supply)?;
           }
 
+          // Verify that the provided payment token accounts
+          // are legitimate, then delegate them to the Bakery PDA. 
           if payment_token_mint.key() != system_program::ID
               && payment_token.key() != system_program::ID
           {
-              // verify it is mint
               let _mint: Account<Mint> = Account::try_from(&payment_token_mint)?;
-
               assert_is_ata(
                   &payment_token,
                   &ctx.accounts.config.authority.key(),
                   &payment_token_mint.key(),
                   Some(&ctx.accounts.config.key()),
               )?;
-
               let cpi_accounts = Approve {
                   to: payment_token.clone(),
                   delegate: ctx.accounts.config.to_account_info(),
@@ -294,22 +311,24 @@ pub fn handler<'a, 'b, 'c, 'info>(
               )?;
           }
 
+          // Set the CandyMachine-related variables in the Sprinkle's state.
           tag.whitelist_mint = whitelist_mint.key();
           tag.whitelist_burn = tag_params.whitelist_burn;
           tag.candy_machine = candy_machine.key();
 
+          // Return the payment token mint as token_mint.
           payment_token_mint.key()
       }
+
       TagType::LimitedOrOpenEdition => {
+          // Verify that the provided token mint is legitimate.
           let token_mint = &ctx.remaining_accounts[0];
-
-          // Check that its a real mint
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
-
           token_mint.key()
       }
   };
 
+  // If the Sprinkle is a SingleUse1Of1, the per_user and total_supply values will both always be 1.
   tag.per_user = match tag_type {
       TagType::SingleUse1Of1 => 1,
       _ => tag_params.per_user,
@@ -319,6 +338,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
   } else {
       tag.total_supply = 1;
   }
+
+  // Store information about the claim method and underlying assets in the Sprinkle's state.
+  // Currently, counters are left unchanged after re-bakes. 
   tag.minter_pays = minter_pays;
   tag.uid = tag_params.uid;
   tag.tag_authority = *ctx.accounts.tag_authority.to_account_info().key;
@@ -326,5 +348,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
   tag.token_mint = token_mint;
   tag.config = ctx.accounts.config.key();
   tag.bump = *ctx.bumps.get("tag").unwrap();
+  
   Ok(())
 }

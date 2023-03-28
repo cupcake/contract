@@ -126,6 +126,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let user = &ctx.accounts.user;
     let config_seeds = &[&PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
 
+    // Ensure the Sprinkle's total_supply value has not already been reached.
+    // HotPotatos have no claim limits, so they are excluded from this check.
+    // Sprinkles with a total_supply of 0 have unlimited claims, so they are excluded from this check.
     if tag.tag_type != TagType::HotPotato
         && (tag.total_supply > 0)
         && (tag.num_claimed == tag.total_supply)
@@ -133,11 +136,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
         return Err(ErrorCode::TagDepleted.into());
     };
 
+    // Ensure the claiming user has not reached the Sprinkle's per_user value.
+    // HotPotatos have no claim limits, so they are excluded from this check.
     require!(
         tag.tag_type == TagType::HotPotato || user_info.num_claimed < tag.per_user,
         ErrorCode::ClaimLimitExceeded
     );
 
+    // Ensure that if the Sprinkle's minter_pays is set to true, 
+    // the BakeryAuthority is not the one paying for the transaction fees.
     if tag.minter_pays {
         require!(config.authority != payer.key(), ErrorCode::AuthorityShouldNotBePayer);
     }
@@ -157,7 +164,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let new_mint_authority = &ctx.remaining_accounts[8];
             let update_authority = &ctx.remaining_accounts[9];
             let token_metadata_program = &ctx.remaining_accounts[10];
-            msg!("1");
+
+            // Make sure that the provided metadata accounts are legitimate.
             let update_auth = grab_update_authority(&metadata)?;
             assert_keys_equal(update_auth, update_authority.key())?;
             assert_keys_equal(tag.token_mint, token_mint.key())?;
@@ -165,10 +173,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 token_metadata_program.key(),
                 Pubkey::from_str(METADATA_PROGRAM_ID).unwrap(),
             )?;
+
+            // Grab the MasterEdition supply, and incremment it to get the new Edition number.
             let edition = get_master_edition_supply(&master_edition)?
                 .checked_add(1)
                 .ok_or(ErrorCode::NumericalOverflowError)?;
-            msg!("2");
+
+            // CPI into the Token Metadata Program to print a new Edition from the MasterEdition.
             invoke(
                 &mint_new_edition_from_master_edition_via_token(
                     token_metadata_program.key(),
@@ -202,7 +213,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     ctx.accounts.rent.to_account_info(),
                 ],
             )?;
-            msg!("3");
         }
 
         TagType::CandyMachineDrop => {
@@ -215,17 +225,18 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let new_mint_authority = &ctx.remaining_accounts[6];
             let token_metadata_program = &ctx.remaining_accounts[7];
             let candy_machine_program = &ctx.remaining_accounts[8];
-            // no spoofing
-            assert_keys_equal(
-                candy_machine_program.key(),
-                Pubkey::from_str("DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9").unwrap(),
-            )?;
             // these three are enforced by inner contract, no need to check
             let clock = &ctx.remaining_accounts[9];
             let recent_slothashes = &ctx.remaining_accounts[10];
             let instruction_sysvar_account = &ctx.remaining_accounts[11];
-            let mut ctr = 12;
 
+            // Ensure the CandyMachine is coming from Cupcake's forked program.
+            assert_keys_equal(
+                candy_machine_program.key(),
+                Pubkey::from_str("DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9").unwrap(),
+            )?;
+
+            let mut ctr = 12;
             let mut keys = vec![
                 AccountMeta::new(candy_machine_id.key(), false),
                 AccountMeta::new_readonly(candy_machine_creator.key(), false),
@@ -244,7 +255,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 AccountMeta::new_readonly(recent_slothashes.key(), false),
                 AccountMeta::new_readonly(instruction_sysvar_account.key(), false),
             ];
-
             let mut accounts = vec![
                 candy_machine_id.clone(),
                 candy_machine_creator.clone(),
@@ -265,6 +275,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 candy_machine_program.clone(),
             ];
 
+            // If the CandyMachine has a whitelist token, we need to include it in the account metas.
             if tag.whitelist_mint != system_program::ID {
                 let whitelist_token_account = &ctx.remaining_accounts[ctr];
                 keys.push(AccountMeta::new(whitelist_token_account.key(), false));
@@ -286,6 +297,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
             }
 
+            // If the CandyMachine has a payment token, we need to include it in the account metas.
             if tag.token_mint != system_program::ID {
                 let token_account = &ctx.remaining_accounts[ctr];
                 keys.push(AccountMeta::new(token_account.key(), false));
@@ -300,6 +312,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
             }
 
+            // Mint one NFT from the CandyMachine, to the claimer's wallet.
             invoke_signed(
                 &Instruction {
                     program_id: candy_machine_program.key(),
@@ -320,13 +333,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let token = &ctx.remaining_accounts[0];
             let user_ata = &ctx.remaining_accounts[1];
 
+            // Ensure both the Bakery and User ATAs are legitimate.
             assert_is_ata(
                 &token,
                 &ctx.accounts.config.authority,
                 &tag.token_mint,
                 Some(&ctx.accounts.config.key()),
             )?;
-
             assert_is_ata(
                 &user_ata,
                 &ctx.accounts.user.key(),
@@ -334,11 +347,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 Some(&ctx.accounts.config.key()),
             )?;
 
+            // Calculate the maximum number of tokens the user
+            // can claim, without exceeding the per_user value.
             amount_to_claim = tag
                 .per_user
                 .checked_sub(ctx.accounts.user_info.num_claimed)
                 .ok_or(ErrorCode::NumericalOverflowError)?;
 
+            // Now, take the minimum of that value,
+            // and the remaining supply in the Sprinkle.
             amount_to_claim = std::cmp::min(
                 amount_to_claim,
                 tag.total_supply
@@ -346,6 +363,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     .ok_or(ErrorCode::NumericalOverflowError)?,
             );
 
+            // Transfer the calculated amount of tokens to the claimer from the Bakery wallet.
             let cpi_accounts = Transfer {
                 from: token.clone(),
                 to: user_ata.clone(),
@@ -353,21 +371,22 @@ pub fn handler<'a, 'b, 'c, 'info>(
             };
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-
             transfer(context.with_signer(&[&config_seeds[..]]), amount_to_claim)?;
         }
+
         TagType::HotPotato => {
             let token = &ctx.remaining_accounts[0];
             let user_token_account = &ctx.remaining_accounts[1];
             let edition = &ctx.remaining_accounts[2];
             let token_mint = &ctx.remaining_accounts[3];
             let token_metadata_program = &ctx.remaining_accounts[4];
+
+            //
             assert_keys_equal(
                 token_metadata_program.key(),
                 Pubkey::from_str(METADATA_PROGRAM_ID).unwrap(),
             )?;
             assert_keys_equal(token.key(), tag.current_token_location)?;
-
             assert_keys_equal(token_mint.key(), tag.token_mint)?;
 
             let user_key = user.key();
@@ -497,6 +516,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         }
     };
 
+    // Increment the num_claimed counter in the claimer's UserInfoPDA.
     ctx.accounts.user_info.num_claimed = ctx
         .accounts
         .user_info
@@ -504,11 +524,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
         .checked_add(amount_to_claim)
         .ok_or(ErrorCode::NumericalOverflowError)?;
 
+    // Increment the num_claimed counter in the SprinklePDA.
     ctx.accounts.tag.num_claimed = ctx
         .accounts
         .tag
         .num_claimed
         .checked_add(amount_to_claim)
         .unwrap();
+
     Ok(())
 }

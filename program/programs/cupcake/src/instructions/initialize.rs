@@ -30,8 +30,14 @@ pub struct Initialize<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler<'a, 'b, 'c, 'info>(ctx: Context<Initialize<'info>>) -> Result<()> {   
+pub fn handler<'a, 'b, 'c, 'info>(ctx: Context<Initialize<'info>>) -> Result<()> {
+    // Now that a fresh Bakery PDA has been created by the Anchor constraints,
+    // we can store the authority account's address and the PDA bump inside.
     ctx.accounts.config.authority = *ctx.accounts.authority.to_account_info().key;
     ctx.accounts.config.bump = *ctx.bumps.get("config").unwrap();
+
+    // We could expand this in the future to store more info, such as a
+    // total sprinkle counter, but for now it exists just to transfer
+    // tokens as a delegate.
     Ok(())
 }
