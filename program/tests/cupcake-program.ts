@@ -1,5 +1,5 @@
 import fs from "fs"
-import { encode } from '@msgpack/msgpack';
+import { encode, decode } from '@msgpack/msgpack';
 import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
 import { 
@@ -146,7 +146,7 @@ describe('cupcake', () => {
       .signers([admin])
       .rpc()
     console.log('Your transaction signature', tx);
-    console.log("Bakery address:", bakeryPDA)
+    console.log("Bakery address:", bakeryPDA.toString())
   });
 
   const TEST_NORMAL_NFTS = false;
@@ -290,14 +290,44 @@ describe('cupcake', () => {
     });
   }
 
+  function parseRuleSetAccountData(ruleSetAccountData: Buffer) {
+      console.log("Data length:", ruleSetAccountData.length)
+
+      // Parse header
+      const ruleSetHeaderData = ruleSetAccountData.slice(0, 9)
+      console.log("ruleSetHeaderData", ruleSetHeaderData)
+      const ruleSetAccountKey = ruleSetHeaderData.at(0)
+      console.log("ruleSetAccountKey", ruleSetAccountKey)
+      const ruleSetAccountRevMapVersionLocation = new anchor.BN(ruleSetHeaderData.slice(1).reverse(), 16)
+      const ruleSetAccountRevMapVersion = ruleSetAccountData.at(ruleSetAccountRevMapVersionLocation.toNumber())
+      console.log("ruleSetAccountRevMapVersion", ruleSetAccountRevMapVersion.toString())
+
+      // parse rev map
+      const ruleSetAccountRevMapData = ruleSetAccountData.slice(ruleSetAccountRevMapVersionLocation.toNumber() + 1)
+      console.log("ruleSetAccountRevMapData", ruleSetAccountRevMapData)
+      const ruleSetAccountRevMapLength = new anchor.BN(ruleSetAccountRevMapData.slice(0, 3).reverse(), 16)
+      const ruleSetAccountRevVersionOffset = ((ruleSetAccountRevMapLength.toNumber() - 1) * 8) + 4
+      const activeRuleSetLocation = new anchor.BN(ruleSetAccountRevMapData.slice(
+        ruleSetAccountRevVersionOffset, 
+        ruleSetAccountRevVersionOffset + 8
+      ).reverse(), 16)
+      console.log("activeRuleSetLocation", activeRuleSetLocation.toString())
+
+      // parse active rule set
+      const activeRuleSetVersionAndData = ruleSetAccountData.slice(activeRuleSetLocation, ruleSetAccountRevMapVersionLocation)
+      console.log("activeRuleSetVersionAndData", activeRuleSetVersionAndData)
+      const activeRuleSetVersion = activeRuleSetVersionAndData.at(0)
+      console.log("activeRuleSetVersion", activeRuleSetVersion)
+      const activeRuleSetData = decode(activeRuleSetVersionAndData.slice(1))
+      console.log("activeRuleSetData", activeRuleSetData)
+  }
+
   it('Should create a TokenAuthRuleSet', async () => {
       const rulesetFile = JSON.parse(fs.readFileSync("./pubkey_list_match.json", 'utf-8'));
       rulesetFile[1] = Array.from(admin.publicKey.toBytes());
+      rulesetFile[3]["Delegate:Transfer"]["PubkeyListMatch"][0][0] = Array.from(bakeryPDA.toBytes());
+      rulesetFile[3]["Transfer:TransferDelegate"]["PubkeyListMatch"][0][0] = Array.from(bakeryPDA.toBytes());
       const encoded = encode(rulesetFile);
-
-      //console.log(Array.from(admin.publicKey.toBytes()))
-      //rulesetFile[3]["Delegate:Transfer"]["PubkeyListMatch"][0][0] = Array.from(admin.publicKey.toBytes());
-      //console.log(rulesetFile[3]["Delegate:Transfer"]["PubkeyListMatch"], "KMDKFKKFR")
 
       const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]
       const createTokenAuthRuleSetIx = createCreateOrUpdateInstruction(
@@ -321,7 +351,14 @@ describe('cupcake', () => {
       const txHash = (await cupcakeProgram.provider.sendAll([{ tx: signedTxn, signers: [admin] }]))[0];
       console.log(txHash)
       }catch(e){console.warn(e)}
-  }); 
+
+      console.log(Array.from(bakeryPDA.toBytes()))
+
+      const ruleSetInfo = await cupcakeProgram.provider.connection.getAccountInfo(rulesetPDA);
+      console.log("RULESET DATA:")
+      parseRuleSetAccountData(ruleSetInfo.data)
+
+  });
 
   it('Should mint a ProgrammableNFT', async () => {
     const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]

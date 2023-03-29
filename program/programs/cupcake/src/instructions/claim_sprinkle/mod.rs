@@ -16,8 +16,12 @@ use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
-    get_master_edition_supply
+    get_master_edition_supply,
+    grab_active_rule_set
 };
+use mpl_token_auth_rules::payload::{Payload, PayloadType};
+use mpl_token_auth_rules::state::{Rule};
+use mpl_token_metadata::processor::AuthorizationData;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct CandyMachineArgs {
@@ -446,11 +450,25 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       token_auth_program.clone(),
                       token_ruleset.clone(),
                   ];
+
+                  let active_rule_set = grab_active_rule_set(token_ruleset);
+                  let delegate_transfer_rule = active_rule_set.get("Delegate:Transfer".to_owned()).unwrap();
+                  let auth_data = match delegate_transfer_rule {
+                      Rule::PubkeyListMatch { pubkeys, field } => {
+                          let payload = Payload::from([(
+                              field.to_owned(), 
+                              PayloadType::Pubkey(config.key())
+                          )]);
+                          Some(AuthorizationData { payload }) 
+                      }
+                      _ => None
+                  };
+
                   let ix_data = 
                       mpl_token_metadata::instruction::MetadataInstruction::Transfer(
                           mpl_token_metadata::instruction::TransferArgs::V1 { 
                               amount: 1, 
-                              authorization_data: None 
+                              authorization_data: auth_data 
                           }
                       );
                   invoke_signed(

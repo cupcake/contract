@@ -4,12 +4,13 @@ use mpl_token_metadata::processor::AuthorizationData;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{assert_is_ata, assert_keys_equal};
+use crate::utils::{assert_is_ata, assert_keys_equal, grab_active_rule_set};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
 use mpl_token_metadata;
 use mpl_token_metadata::instruction::freeze_delegated_account;
 use mpl_token_auth_rules::payload::{Payload, PayloadType};
+use mpl_token_auth_rules::state::{Rule};
 
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -378,18 +379,24 @@ pub fn handler<'a, 'b, 'c, 'info>(
               token_ruleset.clone()
           ];
 
-          msg!(&config.key().to_string());
-
-          let payload = Payload::from([(
-              "Destination".to_owned(), 
-              PayloadType::Pubkey(ctx.accounts.authority.key())
-          )]);
+          let active_rule_set = grab_active_rule_set(token_ruleset);
+          let delegate_transfer_rule = active_rule_set.get("Delegate:Transfer".to_owned()).unwrap();
+          let auth_data = match delegate_transfer_rule {
+              Rule::PubkeyListMatch { pubkeys, field } => {
+                  let payload = Payload::from([(
+                      field.to_owned(), 
+                      PayloadType::Pubkey(config.key())
+                  )]);
+                  Some(AuthorizationData { payload }) 
+              }
+              _ => None
+          };
 
           let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(
                   mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
                       amount: 1, 
-                      authorization_data: Some(AuthorizationData { payload }) 
+                      authorization_data: auth_data
                   }
               );
           invoke_signed(

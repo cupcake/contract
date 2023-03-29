@@ -36,17 +36,7 @@
   ],
   "cupcake-ruleset",
   {
-    "Delegate:Transfer": {
-      "PubkeyListMatch": [
-        [],
-        "Target"
-      ]
-    },
-    "Transfer:TransferDelegate": {
-      "PubkeyListMatch": [
-        [],
-        "Target"
-      ]
-    }
+    "Delegate:Transfer": "Pass",
+    "Transfer:TransferDelegate": "Pass"
   }
 ]

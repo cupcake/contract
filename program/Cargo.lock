@@ -686,6 +686,7 @@ dependencies = [
  "arrayref",
  "mpl-token-auth-rules",
  "mpl-token-metadata",
+ "rmp-serde",
  "spl-token",
 ]
 

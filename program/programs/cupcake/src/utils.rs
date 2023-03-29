@@ -1,5 +1,6 @@
 use crate::errors::ErrorCode;
 use anchor_lang::{
+  prelude::*,
   error,
   prelude::{AccountInfo, Program, Pubkey, Rent, Result, System, Sysvar},
   require,
@@ -14,6 +15,27 @@ use anchor_lang::{
 use anchor_spl::associated_token::get_associated_token_address;
 use arrayref::array_ref;
 use std::convert::TryInto;
+use mpl_token_auth_rules::state::{RuleSetHeader, RuleSetRevisionMapV1, RuleSetV1, Rule};
+
+pub fn grab_active_rule_set(rule_set_account_info: &AccountInfo) -> RuleSetV1 {
+    let rule_set_account_bytes = rule_set_account_info.data.borrow();
+    let (rule_set_header_bytes, all_rule_set_and_rev_map_bytes) = rule_set_account_bytes.split_at(9);
+
+    let rule_set_header = RuleSetHeader::try_from_slice(rule_set_header_bytes).unwrap();
+    let rule_set_rev_map_version = rule_set_account_bytes[rule_set_header.rev_map_version_location];
+    msg!("RuleSetRevisionMap Version Location: {}", rule_set_header.rev_map_version_location);
+    msg!("RuleSetRevisionMap Version: {}", rule_set_rev_map_version);
+
+    let (_, rule_set_rev_map_bytes) = rule_set_account_bytes.split_at(rule_set_header.rev_map_version_location + 1);
+    let rule_set_rev_map = RuleSetRevisionMapV1::try_from_slice(rule_set_rev_map_bytes).unwrap();
+    let active_rule_set_location = rule_set_rev_map.rule_set_revisions[rule_set_rev_map_version as usize - 1];
+    msg!("Active RuleSet Location: {}", active_rule_set_location);
+
+    let (active_rule_set_version_and_bytes, _) = all_rule_set_and_rev_map_bytes.split_at(rule_set_header.rev_map_version_location);
+    let (_, active_rule_set_bytes) = active_rule_set_version_and_bytes.split_at(1);
+
+    rmp_serde::from_slice::<RuleSetV1>(active_rule_set_bytes).unwrap()
+}
 
 /// Checks if two PublicKeys are equal.
 pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> Result<()> {
@@ -87,7 +109,6 @@ pub fn get_master_edition_supply(account_info: &AccountInfo) -> Result<u64> {
 /// Calculates the sighash of the union of two strings.
 pub fn sighash(namespace: &str, name: &str) -> [u8; 8] {
     let preimage = format!("{}:{}", namespace, name);
-
     let mut sighash = [0u8; 8];
     sighash.copy_from_slice(&hash::hash(preimage.as_bytes()).to_bytes()[..8]);
     sighash
