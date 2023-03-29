@@ -333,8 +333,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let token_metadata = &ctx.remaining_accounts[2];
           let token_edition = &ctx.remaining_accounts[3];
           let token_record = &ctx.remaining_accounts[4];
-          let token_metadata_program = &ctx.remaining_accounts[5];
-          let instructions_sysvar = &ctx.remaining_accounts[6];
+          let token_ruleset = &ctx.remaining_accounts[5];
+          let token_ruleset_program = &ctx.remaining_accounts[6];
+          let token_metadata_program = &ctx.remaining_accounts[7];
+          let instructions_sysvar = &ctx.remaining_accounts[8];
 
           // TODO: validation
 
@@ -353,8 +355,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
               AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
               AccountMeta::new_readonly(instructions_sysvar.key(), false),
               AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
-              AccountMeta::new_readonly(token_metadata_program.key(), false),
-              AccountMeta::new_readonly(token_metadata_program.key(), false),
+              AccountMeta::new_readonly(token_ruleset_program.key(), false),
+              AccountMeta::new_readonly(token_ruleset.key(), false),
           ];
           let account_infos = [
               token_metadata_program.clone(),
@@ -369,8 +371,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
               ctx.accounts.system_program.to_account_info(),
               instructions_sysvar.clone(),
               ctx.accounts.token_program.to_account_info(),
-              token_metadata_program.clone(),
-              token_metadata_program.clone()
+              token_ruleset_program.clone(),
+              token_ruleset.clone()
           ];
           let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(

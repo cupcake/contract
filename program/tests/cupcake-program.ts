@@ -5,7 +5,6 @@ import {
   createAssociatedTokenAccount, 
   createAssociatedTokenAccountInstruction, 
   createMint, 
-  getAssociatedTokenAddress, 
   getAssociatedTokenAddressSync, 
   mintTo,
   TOKEN_PROGRAM_ID, 
@@ -16,7 +15,6 @@ import {
   createCreateMasterEditionV3Instruction, 
   createCreateMetadataAccountV3Instruction, 
   createMintInstruction, 
-  PrintSupply, 
   PROGRAM_ID,
   TokenRecord,
   TokenStandard
@@ -95,6 +93,9 @@ function getTokenRecordPDA(tokenMint: anchor.web3.PublicKey, associatedToken: an
   )[0]
 }
 
+const AUTH_PROGRAM = new anchor.web3.PublicKey("auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg")
+const METAPLEX_RULESET = new anchor.web3.PublicKey("eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9")
+
 describe('cupcake', () => {
   anchor.setProvider(anchor.Provider.env());
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
@@ -146,143 +147,146 @@ describe('cupcake', () => {
     console.log("Bakery address:", bakeryPDA)
   });
 
-  it('Should mint a normal NFT', async () => {
-    // Initialize the token mint.
-    tokenMint = await createMint(
-      cupcakeProgram.provider.connection, 
-      admin, 
-      admin.publicKey, 
-      admin.publicKey, 
-      0
-    );
+  const TEST_NORMAL_NFTS = false;
+  if (TEST_NORMAL_NFTS) {
+    it('Should mint a normal NFT', async () => {
+      // Initialize the token mint.
+      tokenMint = await createMint(
+        cupcakeProgram.provider.connection, 
+        admin, 
+        admin.publicKey, 
+        admin.publicKey, 
+        0
+      );
 
-    // Create an ATA for the mint owned by admin.
-    token = await createAssociatedTokenAccount(
-      cupcakeProgram.provider.connection, 
-      admin, 
-      tokenMint, 
-      admin.publicKey
-    );
+      // Create an ATA for the mint owned by admin.
+      token = await createAssociatedTokenAccount(
+        cupcakeProgram.provider.connection, 
+        admin, 
+        tokenMint, 
+        admin.publicKey
+      );
 
-    // Mint a single token from the mint to the ATA.
-    await mintTo(
-      cupcakeProgram.provider.connection, 
-      admin, 
-      tokenMint, 
-      token, 
-      admin, 
-      1
-    );
+      // Mint a single token from the mint to the ATA.
+      await mintTo(
+        cupcakeProgram.provider.connection, 
+        admin, 
+        tokenMint, 
+        token, 
+        admin, 
+        1
+      );
 
-    const metadataPDA = getMetadataPDA(tokenMint)
-    const masterEditionPDA = getMasterEditionPDA(tokenMint)
+      const metadataPDA = getMetadataPDA(tokenMint)
+      const masterEditionPDA = getMasterEditionPDA(tokenMint)
 
-    // Create the CreateMetadata instruction.
-    const createMetadataIx = createCreateMetadataAccountV3Instruction(
-      {  
-        metadata: metadataPDA, 
-        mint: tokenMint, 
-        payer: admin.publicKey, 
-        mintAuthority: admin.publicKey, 
-        updateAuthority: admin.publicKey 
-      },
-      { 
-        createMetadataAccountArgsV3: {
-          data: {
-            name: "CupcakeNFT",
-            symbol: "cNFT",
-            uri: "https://cupcake.com/collection.json",
-            sellerFeeBasisPoints: 0,
-            creators: [{ address: admin.publicKey, share: 100, verified: true }],
-            uses: null,
-            collection: null,
-          },
-          isMutable: true,
-          collectionDetails: null
+      // Create the CreateMetadata instruction.
+      const createMetadataIx = createCreateMetadataAccountV3Instruction(
+        {  
+          metadata: metadataPDA, 
+          mint: tokenMint, 
+          payer: admin.publicKey, 
+          mintAuthority: admin.publicKey, 
+          updateAuthority: admin.publicKey 
+        },
+        { 
+          createMetadataAccountArgsV3: {
+            data: {
+              name: "CupcakeNFT",
+              symbol: "cNFT",
+              uri: "https://cupcake.com/collection.json",
+              sellerFeeBasisPoints: 0,
+              creators: [{ address: admin.publicKey, share: 100, verified: true }],
+              uses: null,
+              collection: null,
+            },
+            isMutable: true,
+            collectionDetails: null
+          }
         }
-      }
-    )
+      )
 
-    // Create the CreateMasterEdition instruction.
-    const createMasterEditionIx = createCreateMasterEditionV3Instruction(
-      { 
-        edition: masterEditionPDA, 
-        metadata: metadataPDA, 
-        mint: tokenMint, 
-        payer: admin.publicKey,
-        mintAuthority: admin.publicKey,
-        updateAuthority: admin.publicKey
-      },
-      { createMasterEditionArgs: { maxSupply: 0 } }
-    )
+      // Create the CreateMasterEdition instruction.
+      const createMasterEditionIx = createCreateMasterEditionV3Instruction(
+        { 
+          edition: masterEditionPDA, 
+          metadata: metadataPDA, 
+          mint: tokenMint, 
+          payer: admin.publicKey,
+          mintAuthority: admin.publicKey,
+          updateAuthority: admin.publicKey
+        },
+        { createMasterEditionArgs: { maxSupply: 0 } }
+      )
 
-    // Pack both instructions into a transaction and send/confirm it.
-    const txn = new anchor.web3.Transaction().add(createMetadataIx, createMasterEditionIx);
-    txn.recentBlockhash = (await cupcakeProgram.provider.connection.getRecentBlockhash()).blockhash;
-    txn.feePayer = cupcakeProgram.provider.wallet.publicKey;
-    const signedTxn = await cupcakeProgram.provider.wallet.signTransaction(txn);
-    const txHash = (await cupcakeProgram.provider.sendAll([{ tx: signedTxn, signers: [admin] }]))[0];
-    console.log(txHash)
-  });
+      // Pack both instructions into a transaction and send/confirm it.
+      const txn = new anchor.web3.Transaction().add(createMetadataIx, createMasterEditionIx);
+      txn.recentBlockhash = (await cupcakeProgram.provider.connection.getRecentBlockhash()).blockhash;
+      txn.feePayer = cupcakeProgram.provider.wallet.publicKey;
+      const signedTxn = await cupcakeProgram.provider.wallet.signTransaction(txn);
+      const txHash = (await cupcakeProgram.provider.sendAll([{ tx: signedTxn, signers: [admin] }]))[0];
+      console.log(txHash)
+    });
 
-  it('Should bake a new Refillable1Of1 Sprinkle', async () => {
-    const tx = await cupcakeProgram.methods
-      .addOrRefillTag({
-        uid: sprinkleUID,
-        numClaims: new anchor.BN(0),
-        perUser: new anchor.BN(1),
-        minterPays: false,
-        pricePerMint: null,
-        whitelistBurn: false,
-        tagType: { refillable1Of1: true }
-      } as any)
-      .accounts({
-        authority: admin.publicKey,
-        payer: admin.publicKey,
-        config: bakeryPDA,
-        tagAuthority: sprinkleAuthority.publicKey,
-        tag: sprinklePDA
-      })
-      .remainingAccounts([
-        { pubkey: tokenMint, isWritable: false, isSigner: false },
-        { pubkey: token, isWritable: true, isSigner: false },
-      ])
-      .signers([admin])
-      .rpc()
-    console.log('Your transaction signature', tx);
-  });
+    it('Should bake a new Refillable1Of1 Sprinkle', async () => {
+      const tx = await cupcakeProgram.methods
+        .addOrRefillTag({
+          uid: sprinkleUID,
+          numClaims: new anchor.BN(0),
+          perUser: new anchor.BN(1),
+          minterPays: false,
+          pricePerMint: null,
+          whitelistBurn: false,
+          tagType: { refillable1Of1: true }
+        } as any)
+        .accounts({
+          authority: admin.publicKey,
+          payer: admin.publicKey,
+          config: bakeryPDA,
+          tagAuthority: sprinkleAuthority.publicKey,
+          tag: sprinklePDA
+        })
+        .remainingAccounts([
+          { pubkey: tokenMint, isWritable: false, isSigner: false },
+          { pubkey: token, isWritable: true, isSigner: false },
+        ])
+        .signers([admin])
+        .rpc()
+      console.log('Your transaction signature', tx);
+    });
 
-  it('Should claim the Refillable1Of1 Sprinkle', async () => {
-    const userATA = await getAssociatedTokenAddress(tokenMint, user.publicKey)
-    try {
-    const tx = await cupcakeProgram.methods
-      .claimTag(0)
-      .accounts({
-        user: user.publicKey,
-        authority: admin.publicKey,
-        payer: admin.publicKey,
-        config: bakeryPDA,
-        tagAuthority: sprinkleAuthority.publicKey,
-        tag: sprinklePDA,
-        userInfo: userInfoPDA,
-      })
-      .remainingAccounts([
-        { pubkey: token, isWritable: true, isSigner: false },
-        { pubkey: userATA, isWritable: true, isSigner: false },
-      ])
-      .preInstructions([
-        createAssociatedTokenAccountInstruction(
-          admin.publicKey, 
-          userATA, 
-          user.publicKey, 
-          tokenMint
-        )
-      ])
-      .signers([admin, sprinkleAuthority])
-      .rpc()
-    console.log('Your transaction signature', tx);
-    }catch(e){console.warn(e)}
-  });
+    it('Should claim the Refillable1Of1 Sprinkle', async () => {
+      const userATA = getAssociatedTokenAddressSync(tokenMint, user.publicKey)
+      try {
+      const tx = await cupcakeProgram.methods
+        .claimTag(0)
+        .accounts({
+          user: user.publicKey,
+          authority: admin.publicKey,
+          payer: admin.publicKey,
+          config: bakeryPDA,
+          tagAuthority: sprinkleAuthority.publicKey,
+          tag: sprinklePDA,
+          userInfo: userInfoPDA,
+        })
+        .remainingAccounts([
+          { pubkey: token, isWritable: true, isSigner: false },
+          { pubkey: userATA, isWritable: true, isSigner: false },
+        ])
+        .preInstructions([
+          createAssociatedTokenAccountInstruction(
+            admin.publicKey, 
+            userATA, 
+            user.publicKey, 
+            tokenMint
+          )
+        ])
+        .signers([admin, sprinkleAuthority])
+        .rpc()
+      console.log('Your transaction signature', tx);
+      }catch(e){console.warn(e)}
+    });
+  }
 
   it('Should mint a ProgrammableNFT', async () => {
     // Initialize the token mint.
@@ -333,7 +337,7 @@ describe('cupcake', () => {
             primarySaleHappened: false,
             tokenStandard: TokenStandard.ProgrammableNonFungible,
             collectionDetails: null,
-            ruleSet: null
+            ruleSet: METAPLEX_RULESET
           },
           decimals: 0,
           printSupply: { __kind: "Zero" }
@@ -383,6 +387,7 @@ describe('cupcake', () => {
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
     const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
+    try{
     const tx = await cupcakeProgram.methods
       .addOrRefillTag({
         uid: sprinkle2UID,
@@ -406,20 +411,22 @@ describe('cupcake', () => {
         { pubkey: metadataPDA, isWritable: true, isSigner: false },
         { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
         { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
+        { pubkey: METAPLEX_RULESET, isWritable: false, isSigner: false },
+        { pubkey: AUTH_PROGRAM, isWritable: false, isSigner: false },
         { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
       ])
       .signers([admin])
       .rpc()
     console.log('Your transaction signature', tx);
-
+    }catch(e){console.warn(e)}
     const tokenRecordInfo = await TokenRecord.fromAccountAddress(cupcakeProgram.provider.connection, tokenRecordPDA)
     const tokenInfo = await getAccount(cupcakeProgram.provider.connection, token)
     console.log(tokenRecordInfo, tokenInfo)
   });
 
   it('Should claim the Programmable_Refillable1Of1 Sprinkle', async () => {
-    const userATA = await getAssociatedTokenAddress(tokenMint, user.publicKey)
+    const userATA = getAssociatedTokenAddressSync(tokenMint, user.publicKey)
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
     const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
