@@ -1,3 +1,5 @@
+import fs from "fs"
+import { encode } from '@msgpack/msgpack';
 import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
 import { 
@@ -21,6 +23,7 @@ import {
 } from "@metaplex-foundation/mpl-token-metadata"
 import { LAMPORTS_PER_SOL, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
+import { createCreateOrUpdateInstruction, findRuleSetPDA } from "@metaplex-foundation/mpl-token-auth-rules"
 
 export const PREFIX = 'cupcake';
 
@@ -94,7 +97,6 @@ function getTokenRecordPDA(tokenMint: anchor.web3.PublicKey, associatedToken: an
 }
 
 const AUTH_PROGRAM = new anchor.web3.PublicKey("auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg")
-const METAPLEX_RULESET = new anchor.web3.PublicKey("eBJLFYPxJmMGKuFwpDWkzxZeUrad92kZRC5BJLpzyT9")
 
 describe('cupcake', () => {
   anchor.setProvider(anchor.Provider.env());
@@ -288,7 +290,42 @@ describe('cupcake', () => {
     });
   }
 
+  it('Should create a TokenAuthRuleSet', async () => {
+      const rulesetFile = JSON.parse(fs.readFileSync("./pubkey_list_match.json", 'utf-8'));
+      rulesetFile[1] = Array.from(admin.publicKey.toBytes());
+      const encoded = encode(rulesetFile);
+
+      //console.log(Array.from(admin.publicKey.toBytes()))
+      //rulesetFile[3]["Delegate:Transfer"]["PubkeyListMatch"][0][0] = Array.from(admin.publicKey.toBytes());
+      //console.log(rulesetFile[3]["Delegate:Transfer"]["PubkeyListMatch"], "KMDKFKKFR")
+
+      const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]
+      const createTokenAuthRuleSetIx = createCreateOrUpdateInstruction(
+        {
+          ruleSetPda: rulesetPDA,
+          payer: admin.publicKey,
+        },
+        {
+          createOrUpdateArgs: {
+            __kind: "V1",
+            serializedRuleSet: encoded
+          }
+        }
+      )
+
+      try{
+      const txn = new anchor.web3.Transaction().add(createTokenAuthRuleSetIx);
+      txn.recentBlockhash = (await cupcakeProgram.provider.connection.getRecentBlockhash()).blockhash;
+      txn.feePayer = cupcakeProgram.provider.wallet.publicKey;
+      const signedTxn = await cupcakeProgram.provider.wallet.signTransaction(txn);
+      const txHash = (await cupcakeProgram.provider.sendAll([{ tx: signedTxn, signers: [admin] }]))[0];
+      console.log(txHash)
+      }catch(e){console.warn(e)}
+  }); 
+
   it('Should mint a ProgrammableNFT', async () => {
+    const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]
+
     // Initialize the token mint.
     tokenMint = await createMint(
       cupcakeProgram.provider.connection, 
@@ -337,7 +374,7 @@ describe('cupcake', () => {
             primarySaleHappened: false,
             tokenStandard: TokenStandard.ProgrammableNonFungible,
             collectionDetails: null,
-            ruleSet: METAPLEX_RULESET
+            ruleSet: rulesetPDA
           },
           decimals: 0,
           printSupply: { __kind: "Zero" }
@@ -387,6 +424,7 @@ describe('cupcake', () => {
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
     const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
+    const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]
     try{
     const tx = await cupcakeProgram.methods
       .addOrRefillTag({
@@ -411,7 +449,7 @@ describe('cupcake', () => {
         { pubkey: metadataPDA, isWritable: true, isSigner: false },
         { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
         { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-        { pubkey: METAPLEX_RULESET, isWritable: false, isSigner: false },
+        { pubkey: rulesetPDA, isWritable: false, isSigner: false },
         { pubkey: AUTH_PROGRAM, isWritable: false, isSigner: false },
         { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
@@ -426,6 +464,7 @@ describe('cupcake', () => {
   });
 
   it('Should claim the Programmable_Refillable1Of1 Sprinkle', async () => {
+    const rulesetPDA = (await findRuleSetPDA(admin.publicKey, "cupcake-ruleset"))[0]
     const userATA = getAssociatedTokenAddressSync(tokenMint, user.publicKey)
     const metadataPDA = getMetadataPDA(tokenMint)
     const masterEditionPDA = getMasterEditionPDA(tokenMint)
@@ -457,7 +496,10 @@ describe('cupcake', () => {
         // Record + destination record
         { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
         { pubkey: destinationTokenRecordPDA, isWritable: true, isSigner: false },
+        // Token ruleset
+        { pubkey: rulesetPDA, isWritable: false, isSigner: false },
         // Programs / Sysvars
+        { pubkey: AUTH_PROGRAM, isWritable: false, isSigner: false },
         { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },

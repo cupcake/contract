@@ -684,6 +684,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "arrayref",
+ "mpl-token-auth-rules",
  "mpl-token-metadata",
  "spl-token",
 ]

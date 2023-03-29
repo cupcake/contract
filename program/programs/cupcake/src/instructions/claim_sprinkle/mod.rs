@@ -400,9 +400,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   let token_edition = &ctx.remaining_accounts[5];
                   let token_record = &ctx.remaining_accounts[6];
                   let destination_token_record = &ctx.remaining_accounts[7];
-                  let associated_token_program = &ctx.remaining_accounts[8];
-                  let token_metadata_program = &ctx.remaining_accounts[9];
-                  let instructions_sysvar = &ctx.remaining_accounts[10];
+                  let token_ruleset = &ctx.remaining_accounts[8];
+                  let token_auth_program = &ctx.remaining_accounts[9];
+                  let associated_token_program = &ctx.remaining_accounts[10];
+                  let token_metadata_program = &ctx.remaining_accounts[11];
+                  let instructions_sysvar = &ctx.remaining_accounts[12];
 
                   // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
                   // which wraps the normal TokenProgram Transfer call.
@@ -422,8 +424,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       AccountMeta::new_readonly(instructions_sysvar.key(), false),
                       AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
                       AccountMeta::new_readonly(associated_token_program.key(), false),
-                      AccountMeta::new_readonly(token_metadata_program.key(), false),
-                      AccountMeta::new_readonly(token_metadata_program.key(), false),
+                      AccountMeta::new_readonly(token_auth_program.key(), false),
+                      AccountMeta::new_readonly(token_ruleset.key(), false),
                   ];
                   let account_infos = [
                       token.clone(),
@@ -441,8 +443,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       instructions_sysvar.clone(),
                       ctx.accounts.token_program.to_account_info(),
                       associated_token_program.clone(),
-                      token_metadata_program.clone(),
-                      token_metadata_program.clone(),
+                      token_auth_program.clone(),
+                      token_ruleset.clone(),
                   ];
                   let ix_data = 
                       mpl_token_metadata::instruction::MetadataInstruction::Transfer(

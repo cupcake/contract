@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
+use mpl_token_metadata::processor::AuthorizationData;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
@@ -8,6 +9,8 @@ use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
 use mpl_token_metadata;
 use mpl_token_metadata::instruction::freeze_delegated_account;
+use mpl_token_auth_rules::payload::{Payload, PayloadType};
+
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct AddOrRefillTagParams {
@@ -374,11 +377,19 @@ pub fn handler<'a, 'b, 'c, 'info>(
               token_ruleset_program.clone(),
               token_ruleset.clone()
           ];
+
+          msg!(&config.key().to_string());
+
+          let payload = Payload::from([(
+              "Destination".to_owned(), 
+              PayloadType::Pubkey(ctx.accounts.authority.key())
+          )]);
+
           let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(
                   mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
                       amount: 1, 
-                      authorization_data: None 
+                      authorization_data: Some(AuthorizationData { payload }) 
                   }
               );
           invoke_signed(
