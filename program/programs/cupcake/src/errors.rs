@@ -49,4 +49,7 @@ pub enum ErrorCode {
     
     #[msg("Hot potato is immutable unless the token is in an ATA on the config authority wallet.")]
     CanOnlyMutateHotPotatoWhenAtHome,
+
+    #[msg("This pNFT rule is not supported by Cupcake yet.")]
+    ProgrammableRuleNotSupported,
 }

@@ -19,9 +19,6 @@ use crate::utils::{
     get_master_edition_supply,
     grab_active_rule_set
 };
-use mpl_token_auth_rules::payload::{Payload, PayloadType};
-use mpl_token_auth_rules::state::{Rule};
-use mpl_token_metadata::processor::AuthorizationData;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct CandyMachineArgs {
@@ -452,17 +449,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   ];
 
                   let active_rule_set = grab_active_rule_set(token_ruleset);
-                  let delegate_transfer_rule = active_rule_set.get("Delegate:Transfer".to_owned()).unwrap();
-                  let auth_data = match delegate_transfer_rule {
-                      Rule::PubkeyListMatch { pubkeys, field } => {
-                          let payload = Payload::from([(
-                              field.to_owned(), 
-                              PayloadType::Pubkey(config.key())
-                          )]);
-                          Some(AuthorizationData { payload }) 
-                      }
-                      _ => None
-                  };
+                  let delegate_transfer_rule = active_rule_set.get("Transfer:TransferDelegate".to_owned()).unwrap();
+                  let auth_data = config.construct_auth_data(config.key(), delegate_transfer_rule, 1);
 
                   let ix_data = 
                       mpl_token_metadata::instruction::MetadataInstruction::Transfer(

@@ -15,7 +15,7 @@ use anchor_lang::{
 use anchor_spl::associated_token::get_associated_token_address;
 use arrayref::array_ref;
 use std::convert::TryInto;
-use mpl_token_auth_rules::state::{RuleSetHeader, RuleSetRevisionMapV1, RuleSetV1, Rule};
+use mpl_token_auth_rules::state::{RuleSetHeader, RuleSetRevisionMapV1, RuleSetV1};
 
 pub fn grab_active_rule_set(rule_set_account_info: &AccountInfo) -> RuleSetV1 {
     let rule_set_account_bytes = rule_set_account_info.data.borrow();
