@@ -27,39 +27,49 @@ impl Config {
     ///
     pub fn construct_auth_data(&self, bakery_key: Pubkey, rule: &Rule, amount: u64) -> Option<AuthorizationData> {
         let payload = match rule {
-            Rule::Pass => None,
+            Rule::Pass => {
+                msg!("Pass");
+                None
+            },
 
-            Rule::Amount { amount, operator, field } => {
-                let payload_fields = [(field.to_owned(), PayloadType::Number(1))];
+            Rule::Amount { amount: _, operator: _, field } => {
+                msg!("Amount");
+                let payload_fields = [(field.to_owned(), PayloadType::Number(amount))];
                 Some(Payload::from(payload_fields))
             }
 
-            Rule::PubkeyMatch { pubkey, field } => {
+            Rule::PubkeyMatch { pubkey: _, field } => {
+                msg!("PubkeyMatch");
                 let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
                 Some(Payload::from(payload_fields))
             }
 
-            Rule::PubkeyListMatch { pubkeys, field } => {
+            Rule::PubkeyListMatch { pubkeys: _, field } => {
+              msg!("PubkeyListMatch");
               let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
               Some(Payload::from(payload_fields))              
             }
 
-            Rule::ProgramOwned { program, field } => {
+            Rule::ProgramOwned { program: _, field } => {
+              msg!("ProgramOwned");
               let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
               Some(Payload::from(payload_fields))              
             }
 
-            Rule::ProgramOwnedList { programs, field } => {
+            Rule::ProgramOwnedList { programs: _, field } => {
+              msg!("ProgramOwnedList");
               let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
               Some(Payload::from(payload_fields))              
             }
 
-            Rule::ProgramOwnedSet { programs, field } => {
+            Rule::ProgramOwnedSet { programs: _, field } => {
+              msg!("ProgramOwnedSet");
               let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
               Some(Payload::from(payload_fields))              
             }
 
-            Rule::PDAMatch { program, pda_field, seeds_field } => {
+            Rule::PDAMatch { program: _, pda_field, seeds_field } => {
+                msg!("PDAMatch");
                 let bakery_seeds_vec = SeedsVec {
                     seeds: vec![
                         (&PDA_PREFIX[..]).to_vec(), 
@@ -74,7 +84,10 @@ impl Config {
                 Some(Payload::from(payload_fields))
             }
 
-            _ => None
+            _ => {
+                msg!("BAD RULE");
+                None
+            }
         };
 
         let auth_data = match payload {
