@@ -3,7 +3,7 @@ import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
 import { CupcakeProgram, getBakeryPDA } from "../sdk/cucpakeProgram";
-import { createProgrammableNFT, createRuleSetAccount } from "../sdk/programmableAssets";
+import { createProgrammableNFT, createRuleSetAccount, mintNFT } from "../sdk/programmableAssets";
 
 describe('cupcake', () => {
   anchor.setProvider(anchor.Provider.env());
@@ -29,6 +29,39 @@ describe('cupcake', () => {
     );
     await cupcakeProgram.provider.connection.confirmTransaction(sig2, 'singleGossip');
   })
+
+  it('Tests for a normal NFT', async () => {
+    const sprinkleUID = "66554433221155"
+    const sprinkleAuthority = anchor.web3.Keypair.generate();
+
+    const nftMint = await mintNFT(
+      cupcakeProgramClient.program.provider,
+      admin,
+      admin.publicKey,
+      0
+    );
+    console.log("nftMint", nftMint.toString());
+
+    const createBakeryTxHash = await cupcakeProgramClient.createBakery()
+    console.log('createBakeryTxHash', createBakeryTxHash);
+
+    const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+      "refillable1Of1",
+      sprinkleUID, 
+      nftMint, 
+      1, 
+      1, 
+      sprinkleAuthority
+    );
+    console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+
+    const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
+      sprinkleUID, 
+      user.publicKey,
+      sprinkleAuthority
+    );
+    console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+});
 
   it('Tests for pNFTs with PubkeyMatch rules', async () => {
     const sprinkleUID = "66554433221100"
@@ -65,10 +98,8 @@ describe('cupcake', () => {
     );
     console.log("programmableNFTMint", programmableNFTMint.toString());
 
-    const createBakeryTxHash = await cupcakeProgramClient.createBakery()
-    console.log('createBakeryTxHash', createBakeryTxHash);
-
     const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+      "programmableUnique",
       sprinkleUID, 
       programmableNFTMint, 
       1, 
@@ -77,14 +108,12 @@ describe('cupcake', () => {
     );
     console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
 
-    try{
     const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
       sprinkleUID, 
       user.publicKey,
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);
-    }catch(e){console.warn(e)}
 });
 
   it('Tests for pNFTs with PubkeyListMatch rules', async () => {
@@ -123,6 +152,7 @@ describe('cupcake', () => {
       console.log("programmableNFTMint", programmableNFTMint.toString());
 
       const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+        "programmableUnique",
         sprinkleUID, 
         programmableNFTMint, 
         1, 

@@ -3,9 +3,9 @@ import { BN, Provider } from "@project-serum/anchor";
 import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
 import * as TokenMetadata from "@metaplex-foundation/mpl-token-metadata"
 import { decode, encode } from "@msgpack/msgpack";
-import { createAssociatedTokenAccount, createMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { createAssociatedTokenAccount, createMint, mintTo, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { getMasterEditionPDA, getMetadataPDA } from "./cucpakeProgram";
-import { createCreateInstruction, createMintInstruction, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { createCreateInstruction, createCreateMasterEditionV3Instruction, createCreateMetadataAccountV3Instruction, createMintInstruction, MasterEditionHasPrintsError, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
 
 export function getTokenRecordPDA(tokenMint: PublicKey, associatedToken: PublicKey) {
@@ -46,6 +46,87 @@ export async function createRuleSetAccount(name: string, owner: Keypair, rules: 
   txn.feePayer = provider.wallet.publicKey;
   const signedTxn = await provider.wallet.signTransaction(txn);
   return (await provider.sendAll([{ tx: signedTxn, signers: [owner] }]))[0];
+}
+
+export async function mintNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number) {
+  // Initialize the token mint.
+  const tokenMint = await createMint(
+    provider.connection, 
+    payer, 
+    creator, 
+    creator, 
+    totalSupply
+  );
+
+  // Create an ATA for the mint owned by admin.
+  const token = await createAssociatedTokenAccount(
+    provider.connection, 
+    payer, 
+    tokenMint, 
+    creator
+  );
+
+  await mintTo(
+    provider.connection, 
+    payer, 
+    tokenMint, 
+    token, 
+    payer, 
+    1
+  );
+
+  const metadataPDA = getMetadataPDA(tokenMint)
+  const masterEditionPDA = getMasterEditionPDA(tokenMint)
+
+  const createMetadataIx = createCreateMetadataAccountV3Instruction(
+    {
+      payer: payer.publicKey,
+      metadata: metadataPDA,
+      mint: tokenMint,
+      mintAuthority: payer.publicKey,
+      updateAuthority: payer.publicKey,
+    },
+    {
+      createMetadataAccountArgsV3: { 
+        data: {
+          name: "CupcakeNFT",
+          symbol: "cNFT",
+          uri: "https://cupcake.com/collection.json",
+          sellerFeeBasisPoints: 0,
+          creators: [{ address: creator, share: 100, verified: true }],
+          uses: null,
+          collection: null,
+        }, 
+        isMutable: true, 
+        collectionDetails: null
+      }
+    }
+  );
+
+  const createMasterEditionIx = createCreateMasterEditionV3Instruction(
+    {
+      edition: masterEditionPDA,
+      mint: tokenMint,
+      updateAuthority: payer.publicKey,
+      mintAuthority: payer.publicKey,
+      payer: payer.publicKey,
+      metadata: metadataPDA
+    },
+    {
+      createMasterEditionArgs: {
+        maxSupply: 0
+      }
+    }
+  );
+
+  // Pack both instructions into a transaction and send/confirm it.
+  const txn = new Transaction().add(createMetadataIx, createMasterEditionIx);
+  txn.recentBlockhash = (await provider.connection.getRecentBlockhash()).blockhash;
+  txn.feePayer = provider.wallet.publicKey;
+  const signedTxn = await provider.wallet.signTransaction(txn);
+  const txHash = (await provider.sendAll([{ tx: signedTxn, signers: [payer] }]))[0];
+  console.log(txHash)
+  return tokenMint
 }
 
 export async function createProgrammableNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number, ruleSetOwner: PublicKey, ruleSetName: string) {

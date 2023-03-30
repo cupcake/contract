@@ -88,17 +88,19 @@ export class CupcakeProgram {
         .rpc()
     }
 
-    async bakeSprinkle(uid: string, tokenMint: PublicKey, numClaims: number, perUser: number, sprinkleAuthority: Keypair) {
+    async bakeSprinkle(sprinkleType: string, uid: string, tokenMint: PublicKey, numClaims: number, perUser: number, sprinkleAuthority: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
       const sprinklePDA = getSprinklePDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         this.program.programId
       );
+
       const bakeryTokenATA = getAssociatedTokenAddressSync(
         tokenMint, 
         this.bakeryAuthorityKeypair.publicKey
       );
+
       const metadataPDA = getMetadataPDA(tokenMint);
       const masterEditionPDA = getMasterEditionPDA(tokenMint);
       const tokenRecordPDA = getTokenRecordPDA(tokenMint, bakeryTokenATA);
@@ -106,6 +108,7 @@ export class CupcakeProgram {
         this.bakeryAuthorityKeypair.publicKey, 
         "cupcake-ruleset"
       ))[0];
+
       return this.program.methods
         .addOrRefillTag({
           uid: sprinkleUID,
@@ -114,7 +117,7 @@ export class CupcakeProgram {
           minterPays: false,
           pricePerMint: null,
           whitelistBurn: false,
-          tagType: { programmableUnique: true }
+          tagType: { [sprinkleType]: true }
         } as any)
         .accounts({
           authority: this.bakeryAuthorityKeypair.publicKey,
