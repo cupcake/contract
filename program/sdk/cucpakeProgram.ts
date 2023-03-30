@@ -5,42 +5,11 @@ import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
 import * as TokenMetadata from "@metaplex-foundation/mpl-token-metadata"
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getTokenRecordPDA } from "./programmableAssets";
+import { Bakery } from "./state/bakery";
+import { Sprinkle } from "./state/sprinkle";
+import { UserInfo } from "./state/userInfo";
 
 export const PDA_PREFIX = 'cupcake';
-
-export function getBakeryPDA(bakeryAuthority: PublicKey, programId: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from(PDA_PREFIX), 
-      bakeryAuthority.toBuffer()
-    ],
-    programId
-  )[0]
-}
-
-
-export function getSprinklePDA(bakeryAuthority: PublicKey, sprinkleUID: BN, programId: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from(PDA_PREFIX), 
-      bakeryAuthority.toBuffer(), 
-      sprinkleUID.toBuffer('le', 8)
-    ],
-    programId
-  )[0]
-}
-
-export function getUserInfoPDA(bakeryAuthority: PublicKey, sprinkleUID: BN, user: PublicKey, programId: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from(PDA_PREFIX), 
-      bakeryAuthority.toBuffer(), 
-      sprinkleUID.toBuffer('le', 8),
-      user.toBuffer()
-    ],
-    programId
-  )[0]
-}
 
 export function getMetadataPDA(tokenMint: PublicKey) {
   return PublicKey.findProgramAddressSync(
@@ -73,7 +42,7 @@ export class CupcakeProgram {
     constructor(program: Program<Cupcake>, bakeryAuthorityKeypair: Keypair) {
       this.program = program;
       this.bakeryAuthorityKeypair = bakeryAuthorityKeypair;
-      this.bakeryPDA = getBakeryPDA(bakeryAuthorityKeypair.publicKey, program.programId)
+      this.bakeryPDA = Bakery.PDA(bakeryAuthorityKeypair.publicKey, program.programId)
     }
 
     async createBakery() {
@@ -90,7 +59,7 @@ export class CupcakeProgram {
 
     async bakeSprinkle(sprinkleType: string, uid: string, tokenMint: PublicKey, numClaims: number, perUser: number, sprinkleAuthority: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
-      const sprinklePDA = getSprinklePDA(
+      const sprinklePDA = Sprinkle.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         this.program.programId
@@ -143,7 +112,7 @@ export class CupcakeProgram {
 
     async claimSprinkle(uid: string, user: PublicKey, sprinkleAuthorityKeypair: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
-      const sprinklePDA = getSprinklePDA(
+      const sprinklePDA = Sprinkle.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         this.program.programId
@@ -157,20 +126,23 @@ export class CupcakeProgram {
         sprinkleState.tokenMint, 
         user
       );
-      const userInfoPDA = getUserInfoPDA(
+      const userInfoPDA = UserInfo.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         user,
         this.program.programId
       );
-      const rulesetPDA = (await TokenAuth.findRuleSetPDA(
-        this.bakeryAuthorityKeypair.publicKey, 
-        "cupcake-ruleset"
-      ))[0];
       const metadataPDA = getMetadataPDA(sprinkleState.tokenMint);
       const masterEditionPDA = getMasterEditionPDA(sprinkleState.tokenMint);
       const tokenRecordPDA = getTokenRecordPDA(sprinkleState.tokenMint, token);
       const destinationTokenRecordPDA = getTokenRecordPDA(sprinkleState.tokenMint, userATA);
+
+      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
+        this.program.provider.connection, 
+        metadataPDA
+      );
+      const rulesetPDA = metadata.programmableConfig?.ruleSet ?? Keypair.generate().publicKey;
+
       return this.program.methods
       .claimTag(0)
       .accounts({

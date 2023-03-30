@@ -2,8 +2,9 @@ import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
-import { CupcakeProgram, getBakeryPDA } from "../sdk/cucpakeProgram";
+import { CupcakeProgram } from "../sdk/cucpakeProgram";
 import { createProgrammableNFT, createRuleSetAccount, mintNFT } from "../sdk/programmableAssets";
+import { Bakery } from '../sdk/state/bakery';
 
 describe('cupcake', () => {
   anchor.setProvider(anchor.Provider.env());
@@ -14,7 +15,7 @@ describe('cupcake', () => {
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
   const cupcakeProgramClient = new CupcakeProgram(cupcakeProgram, admin)
 
-  const bakeryPDA = getBakeryPDA(admin.publicKey, cupcakeProgram.programId);
+  const bakeryPDA = Bakery.PDA(admin.publicKey, cupcakeProgram.programId);
 
   it('Should fund test wallets', async () => {
     let sig = await cupcakeProgram.provider.connection.requestAirdrop(
@@ -88,7 +89,6 @@ it('Tests for pNFTs with Pass rules', async () => {
   );
   console.log("programmableNFTMint", programmableNFTMint.toString());
 
-  try{
   const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
     "programmableUnique",
     sprinkleUID, 
@@ -98,7 +98,6 @@ it('Tests for pNFTs with Pass rules', async () => {
     sprinkleAuthority
   );
   console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
-  }catch(e){console.warn(e)}
 
   const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
     sprinkleUID, 
