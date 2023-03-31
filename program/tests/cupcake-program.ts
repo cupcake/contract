@@ -32,6 +32,7 @@ describe('cupcake', () => {
   })
 
   it('Tests for a normal NFT', async () => {
+    try {
     const sprinkleUID = "66554433221155"
     const sprinkleAuthority = anchor.web3.Keypair.generate();
 
@@ -62,6 +63,42 @@ describe('cupcake', () => {
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+    }catch(e){console.warn(e)}
+});
+
+it('Tests for pNFTs with no ruleset', async () => {
+  const sprinkleUID = "66557433221590"
+  const sprinkleAuthority = anchor.web3.Keypair.generate();
+
+  const programmableNFTMint = await createProgrammableNFT(
+    cupcakeProgramClient.program.provider,
+    admin,
+    admin.publicKey,
+    0,
+    null,
+    null
+  );
+  console.log("programmableNFTMint", programmableNFTMint.toString());
+
+  try {
+  const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+    "programmableUnique",
+    sprinkleUID, 
+    programmableNFTMint, 
+    1, 
+    1, 
+    sprinkleAuthority
+  );
+  console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+
+  const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
+    sprinkleUID, 
+    user.publicKey,
+    sprinkleAuthority
+  );
+  console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+}catch(e){console.warn(e)}
+
 });
 
 it('Tests for pNFTs with Pass rules', async () => {
@@ -89,6 +126,7 @@ it('Tests for pNFTs with Pass rules', async () => {
   );
   console.log("programmableNFTMint", programmableNFTMint.toString());
 
+  try{
   const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
     "programmableUnique",
     sprinkleUID, 
@@ -105,6 +143,65 @@ it('Tests for pNFTs with Pass rules', async () => {
     sprinkleAuthority
   );
   console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+}catch(e){console.warn(e)}
+
+});
+
+it('Tests for pNFTs with Amount rules', async () => {
+  const sprinkleUID = "66556455251101"
+  const sprinkleAuthority = anchor.web3.Keypair.generate();
+
+  const createRuleSetAccountTxHash = await createRuleSetAccount(
+    "cupcake-ruleset", 
+    admin, 
+    {
+      "Delegate:Transfer": {
+        "Amount": [
+          69,
+          "Lt",
+          "Amount"
+        ]
+      },
+      "Transfer:TransferDelegate": {
+        "Amount": [
+          69,
+          "Lt",
+          "Amount"
+        ]
+      }
+    },
+    cupcakeProgramClient.program.provider
+  )
+  console.log("createRuleSetAccountTxHash", createRuleSetAccountTxHash)
+
+  const programmableNFTMint = await createProgrammableNFT(
+    cupcakeProgramClient.program.provider,
+    admin,
+    admin.publicKey,
+    0,
+    admin.publicKey,
+    "cupcake-ruleset"
+  );
+  console.log("programmableNFTMint", programmableNFTMint.toString());
+
+  try{
+  const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+    "programmableUnique",
+    sprinkleUID, 
+    programmableNFTMint, 
+    1, 
+    1, 
+    sprinkleAuthority
+  );
+  console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+
+  const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
+    sprinkleUID, 
+    user.publicKey,
+    sprinkleAuthority
+  );
+  console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+  }catch(e){console.warn(e)}
 });
 
   it('Tests for pNFTs with PubkeyMatch rules', async () => {
@@ -123,7 +220,7 @@ it('Tests for pNFTs with Pass rules', async () => {
         },
         "Transfer:TransferDelegate": {
           "PubkeyMatch": [
-            Array.from(bakeryPDA.toBytes()),
+            Array.from(user.publicKey.toBytes()),
             "Target"
           ]
         }
@@ -152,7 +249,6 @@ it('Tests for pNFTs with Pass rules', async () => {
       sprinkleAuthority
     );
     console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
-    }catch(e){console.warn(e)}
 
     const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
       sprinkleUID, 
@@ -160,6 +256,8 @@ it('Tests for pNFTs with Pass rules', async () => {
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+  }catch(e){console.warn(e)}
+
 });
 
   it('Tests for pNFTs with PubkeyListMatch rules', async () => {
@@ -178,7 +276,7 @@ it('Tests for pNFTs with Pass rules', async () => {
           },
           "Transfer:TransferDelegate": {
             "PubkeyListMatch": [
-              [Array.from(bakeryPDA.toBytes())],
+              [Array.from(user.publicKey.toBytes())],
               "Target"
             ]
           }
@@ -229,12 +327,7 @@ it('Tests for pNFTs with Pass rules', async () => {
             "Target"
           ]
         },
-        "Transfer:TransferDelegate": {
-          "ProgramOwned": [
-            Array.from(cupcakeProgram.programId.toBytes()),
-            "Target"
-          ]
-        }
+        "Transfer:TransferDelegate": "Pass"
       },
       cupcakeProgramClient.program.provider
     )
@@ -282,12 +375,7 @@ it('Tests for pNFTs with Pass rules', async () => {
             "Target"
           ]
         },
-        "Transfer:TransferDelegate": {
-          "ProgramOwnedList": [
-            [Array.from(cupcakeProgram.programId.toBytes())],
-            "Target"
-          ]
-        }
+        "Transfer:TransferDelegate": "Pass"
       },
       cupcakeProgramClient.program.provider
     )

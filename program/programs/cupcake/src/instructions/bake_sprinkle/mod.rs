@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
+use mpl_token_metadata::state::{TokenMetadataAccount, Metadata, ProgrammableConfig};
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{assert_is_ata, assert_keys_equal, grab_active_rule_set};
+use crate::utils::{assert_is_ata, assert_keys_equal, grab_rule_set_rev, grab_latest_rule_set_rev_num};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
 use mpl_token_metadata;
@@ -331,13 +332,16 @@ pub fn handler<'a, 'b, 'c, 'info>(
       TagType::ProgrammableUnique => {
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
-          let token_metadata = &ctx.remaining_accounts[2];
+          let token_metadata_info = &ctx.remaining_accounts[2];
           let token_edition = &ctx.remaining_accounts[3];
-          let token_record = &ctx.remaining_accounts[4];
+          let token_record_info = &ctx.remaining_accounts[4];
           let token_ruleset = &ctx.remaining_accounts[5];
           let token_ruleset_program = &ctx.remaining_accounts[6];
           let token_metadata_program = &ctx.remaining_accounts[7];
           let instructions_sysvar = &ctx.remaining_accounts[8];
+
+          let token_metadata = Metadata::from_account_info(token_metadata_info).unwrap();
+          //let token_record = TokenRecord::from_account_info(token_record_info).unwrap();
 
           // TODO: validation
 
@@ -346,9 +350,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let account_metas = vec![
               AccountMeta::new_readonly(token_metadata_program.key(), false),
               AccountMeta::new_readonly(config.key(), false),
-              AccountMeta::new(token_metadata.key(), false),
+              AccountMeta::new(token_metadata_info.key(), false),
               AccountMeta::new_readonly(token_edition.key(), false),
-              AccountMeta::new(token_record.key(), false),
+              AccountMeta::new(token_record_info.key(), false),
               AccountMeta::new_readonly(token_mint.key(), false),
               AccountMeta::new(token.key(), false),
               AccountMeta::new_readonly(ctx.accounts.authority.key(), true),
@@ -362,9 +366,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let account_infos = [
               token_metadata_program.clone(),
               config.to_account_info(),
-              token_metadata.clone(),
+              token_metadata_info.clone(),
               token_edition.clone(),
-              token_record.clone(),
+              token_record_info.clone(),
               token_mint.clone(),
               token.clone(),
               ctx.accounts.authority.to_account_info(),
@@ -375,10 +379,27 @@ pub fn handler<'a, 'b, 'c, 'info>(
               token_ruleset_program.clone(),
               token_ruleset.clone()
           ];
+          
+          let programmable_config = token_metadata.programmable_config.unwrap();
+          let has_rule_set = match programmable_config {
+              ProgrammableConfig::V1 { rule_set } => {
+                  match rule_set {
+                      Some(_rule_set) => true,
+                      None => false
+                  }
+              }
+          };
+          msg!("has_rule_set: {}", has_rule_set);
 
-          let active_rule_set = grab_active_rule_set(token_ruleset);
-          let delegate_transfer_rule = active_rule_set.get("Delegate:Transfer".to_owned()).unwrap();
-          let auth_data = config.construct_auth_data(config.key(), delegate_transfer_rule, 1);
+          let auth_data = match has_rule_set {
+              true => {
+                  let rule_set_rev_num = grab_latest_rule_set_rev_num(token_ruleset);
+                  let rule_set_rev = grab_rule_set_rev(token_ruleset, rule_set_rev_num);
+                  let delegate_transfer_rule = rule_set_rev.get("Delegate:Transfer".to_owned()).unwrap();
+                  config.construct_auth_data(config.key(), delegate_transfer_rule, 1)
+              }
+              false => None
+          };
 
           let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(

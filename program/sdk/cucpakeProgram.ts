@@ -78,6 +78,13 @@ export class CupcakeProgram {
         "cupcake-ruleset"
       ))[0];
 
+      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
+        this.program.provider.connection, 
+        metadataPDA
+      );
+      const isProgrammable = !!metadata.programmableConfig
+      const hasRuleset = !!metadata.programmableConfig?.ruleSet
+
       return this.program.methods
         .addOrRefillTag({
           uid: sprinkleUID,
@@ -141,7 +148,8 @@ export class CupcakeProgram {
         this.program.provider.connection, 
         metadataPDA
       );
-      const rulesetPDA = metadata.programmableConfig?.ruleSet ?? Keypair.generate().publicKey;
+      const isProgrammable = !!metadata.programmableConfig
+      const hasRuleset = !!metadata.programmableConfig?.ruleSet
 
       return this.program.methods
       .claimTag(0)
@@ -165,11 +173,24 @@ export class CupcakeProgram {
         // Metadata + edition
         { pubkey: metadataPDA, isWritable: true, isSigner: false },
         { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
-        // Record + destination record
-        { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-        { pubkey: destinationTokenRecordPDA, isWritable: true, isSigner: false },
+        // Current token location record
+        { 
+          pubkey: isProgrammable ? tokenRecordPDA : TokenMetadata.PROGRAM_ID, 
+          isWritable: isProgrammable, 
+          isSigner: false 
+        },
+        // Destination token record
+        { 
+          pubkey: isProgrammable ? destinationTokenRecordPDA : TokenMetadata.PROGRAM_ID, 
+          isWritable: isProgrammable, 
+          isSigner: false 
+        },
         // Token ruleset
-        { pubkey: rulesetPDA, isWritable: false, isSigner: false },
+        { 
+          pubkey: hasRuleset ? metadata.programmableConfig!.ruleSet : TokenMetadata.PROGRAM_ID, 
+          isWritable: false, 
+          isSigner: false 
+        },
         // Programs / Sysvars
         { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
         { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },

@@ -17,29 +17,37 @@ use arrayref::array_ref;
 use std::convert::TryInto;
 use mpl_token_auth_rules::state::{RuleSetHeader, RuleSetRevisionMapV1, RuleSetV1};
 
-pub fn grab_active_rule_set(rule_set_account_info: &AccountInfo) -> RuleSetV1 {
-    msg!("Grabbing rule set");
+pub fn grab_latest_rule_set_rev_num(rule_set_account_info: &AccountInfo) -> u64 {
+  let rule_set_account_bytes = rule_set_account_info.data.borrow();
+  let (rule_set_header_bytes, _all_rule_set_and_rev_map_bytes) = rule_set_account_bytes.split_at(9);
+
+  let rule_set_header = RuleSetHeader::try_from_slice(rule_set_header_bytes).unwrap();
+  msg!("RuleSetRevisionMap Version Location: {}", rule_set_header.rev_map_version_location);
+
+  let (_, rule_set_rev_map_bytes) = rule_set_account_bytes.split_at(rule_set_header.rev_map_version_location + 1);
+  let rule_set_rev_map = RuleSetRevisionMapV1::try_from_slice(rule_set_rev_map_bytes).unwrap();    
+  let rule_set_rev_map_array_len = rule_set_rev_map.rule_set_revisions.len() - 1;
+  msg!("rule_set_rev_map_array_len: {}", rule_set_rev_map_array_len);
+
+  rule_set_rev_map_array_len.try_into().unwrap()
+}
+
+pub fn grab_rule_set_rev(rule_set_account_info: &AccountInfo, rev_number: u64) -> RuleSetV1 {
+    msg!("Grabbing rule set #{}", rev_number);
 
     let rule_set_account_bytes = rule_set_account_info.data.borrow();
     let (rule_set_header_bytes, all_rule_set_and_rev_map_bytes) = rule_set_account_bytes.split_at(9);
 
     let rule_set_header = RuleSetHeader::try_from_slice(rule_set_header_bytes).unwrap();
-    let rule_set_rev_map_version = rule_set_account_bytes[rule_set_header.rev_map_version_location];
     msg!("RuleSetRevisionMap Version Location: {}", rule_set_header.rev_map_version_location);
-    msg!("RuleSetRevisionMap Version: {}", rule_set_rev_map_version);
 
     let (_, rule_set_rev_map_bytes) = rule_set_account_bytes.split_at(rule_set_header.rev_map_version_location + 1);
-    let rule_set_rev_map = RuleSetRevisionMapV1::try_from_slice(rule_set_rev_map_bytes).unwrap();
-    let rule_set_rev_number = rule_set_rev_map.rule_set_revisions.len() - 1;
-    let active_rule_set_location = rule_set_rev_map.rule_set_revisions[rule_set_rev_number];
+    let rule_set_rev_map = RuleSetRevisionMapV1::try_from_slice(rule_set_rev_map_bytes).unwrap();    
+    let active_rule_set_location = rule_set_rev_map.rule_set_revisions[rev_number as usize];
     msg!("Active RuleSet Location: {}", active_rule_set_location);
-    msg!("Active RuleSet Revision Number: {}", rule_set_rev_number);
 
     let (_, active_rule_set_and_version_bytes) = all_rule_set_and_rev_map_bytes.split_at(active_rule_set_location - 9);
     let (_, active_rule_set_bytes) = active_rule_set_and_version_bytes.split_at(1);
-    //let (active_rule_set_version_and_bytes, _) = all_rule_set_and_rev_map_bytes.split_at(rule_set_header.rev_map_version_location);
-    //let (_, mut active_rule_set_bytes) = active_rule_set_version_and_bytes.split_at();
-    //(_, active_rule_set_bytes) = active_rule_set_version_and_bytes.split_at(1);
 
     rmp_serde::from_slice::<RuleSetV1>(active_rule_set_bytes).unwrap()
 }

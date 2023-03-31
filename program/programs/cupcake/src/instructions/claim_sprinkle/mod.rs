@@ -9,6 +9,7 @@ use mpl_token_metadata::instruction::{
     thaw_delegated_account, freeze_delegated_account, 
     mint_new_edition_from_master_edition_via_token
 };
+use mpl_token_metadata::state::{TokenRecord, TokenMetadataAccount, Metadata, ProgrammableConfig};
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
@@ -17,7 +18,7 @@ use crate::utils::{
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
-    grab_active_rule_set
+    grab_rule_set_rev, grab_latest_rule_set_rev_num
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -397,15 +398,18 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   // If more than 9 accounts are passed, just ignore the extras.
                   let bakery_authority = &ctx.remaining_accounts[2];
                   let token_mint = &ctx.remaining_accounts[3];
-                  let token_metadata = &ctx.remaining_accounts[4];
+                  let token_metadata_info = &ctx.remaining_accounts[4];
                   let token_edition = &ctx.remaining_accounts[5];
-                  let token_record = &ctx.remaining_accounts[6];
+                  let token_record_info = &ctx.remaining_accounts[6];
                   let destination_token_record = &ctx.remaining_accounts[7];
                   let token_ruleset = &ctx.remaining_accounts[8];
                   let token_auth_program = &ctx.remaining_accounts[9];
                   let associated_token_program = &ctx.remaining_accounts[10];
                   let token_metadata_program = &ctx.remaining_accounts[11];
                   let instructions_sysvar = &ctx.remaining_accounts[12];
+
+                  let token_metadata = Metadata::from_account_info(token_metadata_info).unwrap();
+                  let token_record = TokenRecord::from_account_info(token_record_info).unwrap();
 
                   // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
                   // which wraps the normal TokenProgram Transfer call.
@@ -415,9 +419,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       AccountMeta::new(user_ata.key(), false),
                       AccountMeta::new_readonly(user.key(), false),
                       AccountMeta::new_readonly(token_mint.key(), false),
-                      AccountMeta::new(token_metadata.key(), false),
+                      AccountMeta::new(token_metadata_info.key(), false),
                       AccountMeta::new(token_edition.key(), false),
-                      AccountMeta::new(token_record.key(), false),
+                      AccountMeta::new(token_record_info.key(), false),
                       AccountMeta::new(destination_token_record.key(), false),
                       AccountMeta::new_readonly(config.key(), true),
                       AccountMeta::new(payer.key(), true),
@@ -434,9 +438,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       user_ata.clone(),
                       user.to_account_info(),
                       token_mint.clone(),
-                      token_metadata.clone(),
+                      token_metadata_info.clone(),
                       token_edition.clone(),
-                      token_record.clone(),
+                      token_record_info.clone(),
                       destination_token_record.clone(),
                       config.to_account_info(),
                       payer.to_account_info(),
@@ -448,9 +452,29 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       token_ruleset.clone(),
                   ];
 
-                  let active_rule_set = grab_active_rule_set(token_ruleset);
-                  let delegate_transfer_rule = active_rule_set.get("Transfer:TransferDelegate".to_owned()).unwrap();
-                  let auth_data = config.construct_auth_data(config.key(), delegate_transfer_rule, 1);
+                  let programmable_config = token_metadata.programmable_config.unwrap();
+                  let has_rule_set = match programmable_config {
+                      ProgrammableConfig::V1 { rule_set } => {
+                          match rule_set {
+                              Some(_rule_set) => true,
+                              None => false
+                          }
+                      }
+                  };
+                  msg!("has_rule_set: {}", has_rule_set);
+                  
+                  let auth_data = match has_rule_set {
+                      true => {
+                          let rule_set_rev_num = match token_record.rule_set_revision {
+                              Some(rev_number) => rev_number,
+                              None => grab_latest_rule_set_rev_num(token_ruleset)
+                          };
+                          let rule_set_rev = grab_rule_set_rev(token_ruleset, rule_set_rev_num);
+                          let delegate_transfer_rule = rule_set_rev.get("Delegate:Transfer".to_owned()).unwrap();
+                          config.construct_auth_data(user.key(), delegate_transfer_rule, 1)
+                      }
+                      false => None
+                  };
 
                   let ix_data = 
                       mpl_token_metadata::instruction::MetadataInstruction::Transfer(
@@ -459,6 +483,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                               authorization_data: auth_data 
                           }
                       );
+                      
                   invoke_signed(
                       &Instruction {  
                           program_id: token_metadata_program.key(),

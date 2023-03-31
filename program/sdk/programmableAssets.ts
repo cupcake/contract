@@ -129,7 +129,9 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
   return tokenMint
 }
 
-export async function createProgrammableNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number, ruleSetOwner: PublicKey, ruleSetName: string) {
+export async function createProgrammableNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number, ruleSetOwner?: PublicKey, ruleSetName?: string) {
+    const hasRuleset = !!ruleSetOwner || !!ruleSetName;
+
    // Initialize the token mint.
    const tokenMint = await createMint(
     provider.connection, 
@@ -147,7 +149,7 @@ export async function createProgrammableNFT(provider: Provider, payer: Keypair, 
     creator
   );
 
-  const rulesetPDA = (await TokenAuth.findRuleSetPDA(ruleSetOwner, ruleSetName))[0]
+  const rulesetPDA = hasRuleset ? (await TokenAuth.findRuleSetPDA(ruleSetOwner, ruleSetName))[0] : undefined
   const metadataPDA = getMetadataPDA(tokenMint)
   const masterEditionPDA = getMasterEditionPDA(tokenMint)
   const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)

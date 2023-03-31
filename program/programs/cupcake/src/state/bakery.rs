@@ -36,37 +36,18 @@ impl Config {
                 msg!("Amount");
                 let payload_fields = [(field.to_owned(), PayloadType::Number(amount))];
                 Some(Payload::from(payload_fields))
-            }
+            },
 
-            Rule::PubkeyMatch { pubkey: _, field } => {
+            Rule::PubkeyMatch { pubkey: _, field } 
+                | Rule::PubkeyListMatch { pubkeys: _, field } 
+                | Rule::ProgramOwned { program: _, field }
+                | Rule::ProgramOwnedList { programs: _, field }
+                | Rule::ProgramOwnedSet { programs: _, field }
+            => {
                 msg!("PubkeyMatch");
                 let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
                 Some(Payload::from(payload_fields))
-            }
-
-            Rule::PubkeyListMatch { pubkeys: _, field } => {
-              msg!("PubkeyListMatch");
-              let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
-              Some(Payload::from(payload_fields))              
-            }
-
-            Rule::ProgramOwned { program: _, field } => {
-              msg!("ProgramOwned");
-              let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
-              Some(Payload::from(payload_fields))              
-            }
-
-            Rule::ProgramOwnedList { programs: _, field } => {
-              msg!("ProgramOwnedList");
-              let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
-              Some(Payload::from(payload_fields))              
-            }
-
-            Rule::ProgramOwnedSet { programs: _, field } => {
-              msg!("ProgramOwnedSet");
-              let payload_fields = [(field.to_owned(), PayloadType::Pubkey(bakery_key))];
-              Some(Payload::from(payload_fields))              
-            }
+            },
 
             Rule::PDAMatch { program: _, pda_field, seeds_field } => {
                 msg!("PDAMatch");
@@ -82,12 +63,12 @@ impl Config {
                     (seeds_field.to_owned(), PayloadType::Seeds(bakery_seeds_vec))
                 ];
                 Some(Payload::from(payload_fields))
-            }
+            },
 
             _ => {
                 msg!("BAD RULE");
                 None
-            }
+            },
         };
 
         let auth_data = match payload {
