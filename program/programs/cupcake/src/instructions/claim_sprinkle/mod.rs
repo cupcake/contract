@@ -4,12 +4,13 @@ use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::program::{invoke_signed, invoke};
 use anchor_lang::solana_program::system_program;
 use anchor_spl::token::{self, Token};
+use mpl_token_auth_rules::payload::Payload;
 use mpl_token_metadata;
 use mpl_token_metadata::instruction::{
     thaw_delegated_account, freeze_delegated_account, 
     mint_new_edition_from_master_edition_via_token
 };
-use mpl_token_metadata::state::{TokenRecord, TokenMetadataAccount, Metadata, ProgrammableConfig};
+use mpl_token_metadata::processor::AuthorizationData;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
@@ -18,7 +19,6 @@ use crate::utils::{
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
-    grab_rule_set_rev, grab_latest_rule_set_rev_num
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -408,9 +408,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   let token_metadata_program = &ctx.remaining_accounts[11];
                   let instructions_sysvar = &ctx.remaining_accounts[12];
 
-                  let token_metadata = Metadata::from_account_info(token_metadata_info).unwrap();
-                  let token_record = TokenRecord::from_account_info(token_record_info).unwrap();
-
                   // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
                   // which wraps the normal TokenProgram Transfer call.
                   let account_metas = vec![
@@ -452,35 +449,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       token_ruleset.clone(),
                   ];
 
-                  let programmable_config = token_metadata.programmable_config.unwrap();
-                  let has_rule_set = match programmable_config {
-                      ProgrammableConfig::V1 { rule_set } => {
-                          match rule_set {
-                              Some(_rule_set) => true,
-                              None => false
-                          }
-                      }
-                  };
-                  msg!("has_rule_set: {}", has_rule_set);
-                  
-                  let auth_data = match has_rule_set {
-                      true => {
-                          let rule_set_rev_num = match token_record.rule_set_revision {
-                              Some(rev_number) => rev_number,
-                              None => grab_latest_rule_set_rev_num(token_ruleset)
-                          };
-                          let rule_set_rev = grab_rule_set_rev(token_ruleset, rule_set_rev_num);
-                          let delegate_transfer_rule = rule_set_rev.get("Delegate:Transfer".to_owned()).unwrap();
-                          config.construct_auth_data(user.key(), delegate_transfer_rule, 1)
-                      }
-                      false => None
-                  };
-
                   let ix_data = 
                       mpl_token_metadata::instruction::MetadataInstruction::Transfer(
                           mpl_token_metadata::instruction::TransferArgs::V1 { 
                               amount: 1, 
-                              authorization_data: auth_data 
+                              authorization_data: Some(AuthorizationData { payload: Payload::new() }) 
                           }
                       );
                       

@@ -215,13 +215,13 @@ it('Tests for pNFTs with Amount rules', async () => {
         "Delegate:Transfer": {
           "PubkeyMatch": [
             Array.from(bakeryPDA.toBytes()),
-            "Target"
+            "Delegate"
           ]
         },
         "Transfer:TransferDelegate": {
           "PubkeyMatch": [
             Array.from(user.publicKey.toBytes()),
-            "Target"
+            "Destination"
           ]
         }
       },
@@ -271,13 +271,13 @@ it('Tests for pNFTs with Amount rules', async () => {
           "Delegate:Transfer": {
             "PubkeyListMatch": [
               [Array.from(bakeryPDA.toBytes())],
-              "Target"
+              "Delegate"
             ]
           },
           "Transfer:TransferDelegate": {
             "PubkeyListMatch": [
               [Array.from(user.publicKey.toBytes())],
-              "Target"
+              "Destination"
             ]
           }
         },
@@ -324,7 +324,7 @@ it('Tests for pNFTs with Amount rules', async () => {
         "Delegate:Transfer": {
           "ProgramOwned": [
             Array.from(cupcakeProgram.programId.toBytes()),
-            "Target"
+            "Delegate"
           ]
         },
         "Transfer:TransferDelegate": "Pass"
@@ -372,7 +372,7 @@ it('Tests for pNFTs with Amount rules', async () => {
         "Delegate:Transfer": {
           "ProgramOwnedList": [
             [Array.from(cupcakeProgram.programId.toBytes())],
-            "Target"
+            "Delegate"
           ]
         },
         "Transfer:TransferDelegate": "Pass"

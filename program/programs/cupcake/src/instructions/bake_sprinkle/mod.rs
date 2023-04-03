@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
-use mpl_token_metadata::state::{TokenMetadataAccount, Metadata, ProgrammableConfig};
+use mpl_token_auth_rules::payload::Payload;
+use mpl_token_metadata::processor::AuthorizationData;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{assert_is_ata, assert_keys_equal, grab_rule_set_rev, grab_latest_rule_set_rev_num};
+use crate::utils::{assert_is_ata, assert_keys_equal};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
 use mpl_token_metadata;
@@ -339,10 +340,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let token_ruleset_program = &ctx.remaining_accounts[6];
           let token_metadata_program = &ctx.remaining_accounts[7];
           let instructions_sysvar = &ctx.remaining_accounts[8];
-
-          let token_metadata = Metadata::from_account_info(token_metadata_info).unwrap();
-          //let token_record = TokenRecord::from_account_info(token_record_info).unwrap();
-
           // TODO: validation
 
           // We need to CPI to TokenMetadataProgram to call Delegate for pNFTs, 
@@ -380,32 +377,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
               token_ruleset.clone()
           ];
           
-          let programmable_config = token_metadata.programmable_config.unwrap();
-          let has_rule_set = match programmable_config {
-              ProgrammableConfig::V1 { rule_set } => {
-                  match rule_set {
-                      Some(_rule_set) => true,
-                      None => false
-                  }
-              }
-          };
-          msg!("has_rule_set: {}", has_rule_set);
-
-          let auth_data = match has_rule_set {
-              true => {
-                  let rule_set_rev_num = grab_latest_rule_set_rev_num(token_ruleset);
-                  let rule_set_rev = grab_rule_set_rev(token_ruleset, rule_set_rev_num);
-                  let delegate_transfer_rule = rule_set_rev.get("Delegate:Transfer".to_owned()).unwrap();
-                  config.construct_auth_data(config.key(), delegate_transfer_rule, 1)
-              }
-              false => None
-          };
-
           let ix_data = 
               mpl_token_metadata::instruction::MetadataInstruction::Delegate(
                   mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
                       amount: 1, 
-                      authorization_data: auth_data
+                      authorization_data: Some(AuthorizationData { payload: Payload::new() })
                   }
               );
               
