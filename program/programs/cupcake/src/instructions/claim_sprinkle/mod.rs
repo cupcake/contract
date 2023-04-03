@@ -4,22 +4,23 @@ use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::solana_program::program::{invoke_signed, invoke};
 use anchor_lang::solana_program::system_program;
 use anchor_spl::token::{self, Token};
+use mpl_token_auth_rules::payload::Payload;
 use mpl_token_metadata;
-use mpl_token_metadata::instruction::{
-    thaw_delegated_account, freeze_delegated_account, 
-    mint_new_edition_from_master_edition_via_token
-};
-use mpl_token_metadata::state::{TokenRecord, TokenMetadataAccount, Metadata, ProgrammableConfig};
+use mpl_token_metadata::processor::AuthorizationData;
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
+use mpl_token_metadata::instruction::{
+  thaw_delegated_account, freeze_delegated_account, 
+  mint_new_edition_from_master_edition_via_token, TransferArgs, InstructionBuilder
+};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
-    grab_rule_set_rev, grab_latest_rule_set_rev_num
 };
+use mpl_token_metadata::instruction::builders::TransferBuilder;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct CandyMachineArgs {
@@ -405,92 +406,55 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   let token_ruleset = &ctx.remaining_accounts[8];
                   let token_auth_program = &ctx.remaining_accounts[9];
                   let associated_token_program = &ctx.remaining_accounts[10];
-                  let token_metadata_program = &ctx.remaining_accounts[11];
+                  let _token_metadata_program = &ctx.remaining_accounts[11];
                   let instructions_sysvar = &ctx.remaining_accounts[12];
 
-                  let token_metadata = Metadata::from_account_info(token_metadata_info).unwrap();
-                  let token_record = TokenRecord::from_account_info(token_record_info).unwrap();
+                  let transfer_ix = TransferBuilder::new()
+                      .mint(token_mint.key())
+                      .token(token.key())
+                      .authority(bakery_authority.key())
+                      .destination(user_ata.key())
+                      .destination_owner(user.key())
+                      .metadata(token_metadata_info.key())
+                      .edition(token_edition.key())
+                      .owner_token_record(token_record_info.key())
+                      .destination_token_record(destination_token_record.key())
+                      .token_owner(config.authority)
+                      .authorization_rules(token_ruleset.key())
+                      .payer(ctx.accounts.payer.key())
+                      .system_program(ctx.accounts.system_program.key())
+                      .spl_token_program(ctx.accounts.token_program.key())
+                      .spl_ata_program(associated_token_program.key())
+                      .authorization_rules_program(token_auth_program.key())
+                      .sysvar_instructions(instructions_sysvar.key())
+                      .build(TransferArgs::V1 { 
+                          amount: 1, 
+                          authorization_data: Some(AuthorizationData { payload: Payload::new() }) 
+                      })
+                      .unwrap()
+                      .instruction();
 
-                  // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
-                  // which wraps the normal TokenProgram Transfer call.
-                  let account_metas = vec![
-                      AccountMeta::new(token.key(), false),
-                      AccountMeta::new_readonly(bakery_authority.key(), false),
-                      AccountMeta::new(user_ata.key(), false),
-                      AccountMeta::new_readonly(user.key(), false),
-                      AccountMeta::new_readonly(token_mint.key(), false),
-                      AccountMeta::new(token_metadata_info.key(), false),
-                      AccountMeta::new(token_edition.key(), false),
-                      AccountMeta::new(token_record_info.key(), false),
-                      AccountMeta::new(destination_token_record.key(), false),
-                      AccountMeta::new_readonly(config.key(), true),
-                      AccountMeta::new(payer.key(), true),
-                      AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
-                      AccountMeta::new_readonly(instructions_sysvar.key(), false),
-                      AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
-                      AccountMeta::new_readonly(associated_token_program.key(), false),
-                      AccountMeta::new_readonly(token_auth_program.key(), false),
-                      AccountMeta::new_readonly(token_ruleset.key(), false),
-                  ];
-                  let account_infos = [
-                      token.clone(),
-                      bakery_authority.to_account_info(),
-                      user_ata.clone(),
-                      user.to_account_info(),
-                      token_mint.clone(),
-                      token_metadata_info.clone(),
-                      token_edition.clone(),
-                      token_record_info.clone(),
-                      destination_token_record.clone(),
-                      config.to_account_info(),
-                      payer.to_account_info(),
-                      ctx.accounts.system_program.to_account_info(),
-                      instructions_sysvar.clone(),
-                      ctx.accounts.token_program.to_account_info(),
-                      associated_token_program.clone(),
-                      token_auth_program.clone(),
-                      token_ruleset.clone(),
-                  ];
-
-                  let programmable_config = token_metadata.programmable_config.unwrap();
-                  let has_rule_set = match programmable_config {
-                      ProgrammableConfig::V1 { rule_set } => {
-                          match rule_set {
-                              Some(_rule_set) => true,
-                              None => false
-                          }
-                      }
-                  };
-                  msg!("has_rule_set: {}", has_rule_set);
-                  
-                  let auth_data = match has_rule_set {
-                      true => {
-                          let rule_set_rev_num = match token_record.rule_set_revision {
-                              Some(rev_number) => rev_number,
-                              None => grab_latest_rule_set_rev_num(token_ruleset)
-                          };
-                          let rule_set_rev = grab_rule_set_rev(token_ruleset, rule_set_rev_num);
-                          let delegate_transfer_rule = rule_set_rev.get("Delegate:Transfer".to_owned()).unwrap();
-                          config.construct_auth_data(user.key(), delegate_transfer_rule, 1)
-                      }
-                      false => None
-                  };
-
-                  let ix_data = 
-                      mpl_token_metadata::instruction::MetadataInstruction::Transfer(
-                          mpl_token_metadata::instruction::TransferArgs::V1 { 
-                              amount: 1, 
-                              authorization_data: auth_data 
-                          }
-                      );
-                      
                   invoke_signed(
-                      &Instruction {  
-                          program_id: token_metadata_program.key(),
-                          accounts: account_metas,
-                          data: ix_data.try_to_vec().unwrap(),
-                      }, 
-                      &account_infos,
+                    &transfer_ix, 
+                      &[
+                          token.clone(),
+                          bakery_authority.clone(),
+                          user_ata.clone(),
+                          user.to_account_info(),
+                          token_mint.clone(),
+                          token_metadata_info.clone(),
+                          token_edition.clone(),
+                          token_record_info.clone(),
+                          destination_token_record.clone(),
+                          config.to_account_info(),
+                          ctx.accounts.payer.to_account_info(),
+                          ctx.accounts.system_program.to_account_info(),
+                          instructions_sysvar.clone(),
+                          ctx.accounts.token_program.to_account_info(),
+                          associated_token_program.clone(),
+                          token_auth_program.clone(),
+                          token_ruleset.clone(),
+                      ],
                       &[&config_seeds[..]],
                   )?
                 }

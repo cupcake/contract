@@ -8,6 +8,7 @@ import { getTokenRecordPDA } from "./programmableAssets";
 import { Bakery } from "./state/bakery";
 import { Sprinkle } from "./state/sprinkle";
 import { UserInfo } from "./state/userInfo";
+import { RuleSet } from "./state/programmableAsset";
 
 export const PDA_PREFIX = 'cupcake';
 
@@ -73,17 +74,18 @@ export class CupcakeProgram {
       const metadataPDA = getMetadataPDA(tokenMint);
       const masterEditionPDA = getMasterEditionPDA(tokenMint);
       const tokenRecordPDA = getTokenRecordPDA(tokenMint, bakeryTokenATA);
-      const rulesetPDA = (await TokenAuth.findRuleSetPDA(
-        this.bakeryAuthorityKeypair.publicKey, 
-        "cupcake-ruleset"
-      ))[0];
 
       const metadata = await TokenMetadata.Metadata.fromAccountAddress(
         this.program.provider.connection, 
         metadataPDA
       );
+
       const isProgrammable = !!metadata.programmableConfig
       const hasRuleset = !!metadata.programmableConfig?.ruleSet
+      console.log("isProgrammable", isProgrammable, "hasRuleset", hasRuleset)
+      if (hasRuleset) {
+        await RuleSet.fromAccountAddress(this.program.provider.connection, metadata.programmableConfig!.ruleSet, 0)
+      }
 
       return this.program.methods
         .addOrRefillTag({
@@ -108,7 +110,11 @@ export class CupcakeProgram {
           { pubkey: metadataPDA, isWritable: true, isSigner: false },
           { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
           { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-          { pubkey: rulesetPDA, isWritable: false, isSigner: false },
+          { 
+            pubkey: hasRuleset ? metadata.programmableConfig!.ruleSet : TokenMetadata.PROGRAM_ID, 
+            isWritable: false, 
+            isSigner: false 
+          },
           { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
           { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
           { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
@@ -148,8 +154,13 @@ export class CupcakeProgram {
         this.program.provider.connection, 
         metadataPDA
       );
+      
       const isProgrammable = !!metadata.programmableConfig
       const hasRuleset = !!metadata.programmableConfig?.ruleSet
+      console.log("isProgrammable", isProgrammable, "hasRuleset", hasRuleset)
+      if (hasRuleset) {
+        await RuleSet.fromAccountAddress(this.program.provider.connection, metadata.programmableConfig!.ruleSet, 0)
+      }
 
       return this.program.methods
       .claimTag(0)
