@@ -78,12 +78,37 @@ export class CupcakeProgram {
         "cupcake-ruleset"
       ))[0];
 
-      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
-        this.program.provider.connection, 
-        metadataPDA
-      );
-      const isProgrammable = !!metadata.programmableConfig
-      const hasRuleset = !!metadata.programmableConfig?.ruleSet
+      const remainingAccounts = []
+      if (["walletRestrictedFungible", "singleUse1Of1", "refillable1Of1", "programmableUnique"].includes(sprinkleType)) {
+        remainingAccounts.push({ pubkey: tokenMint, isWritable: false, isSigner: false })
+        remainingAccounts.push({ pubkey: bakeryTokenATA, isWritable: true, isSigner: false })
+
+        if (sprinkleType === "programmableUnique") {
+          remainingAccounts.push({ pubkey: metadataPDA, isWritable: true, isSigner: false })
+          remainingAccounts.push({ pubkey: masterEditionPDA, isWritable: false, isSigner: false })
+
+          const metadata = await TokenMetadata.Metadata.fromAccountAddress(
+            this.program.provider.connection, 
+            metadataPDA
+          );
+
+          if (metadata.programmableConfig) {
+            remainingAccounts.push({ pubkey: tokenRecordPDA, isWritable: true, isSigner: false })
+          } else {
+            remainingAccounts.push({ pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false })
+          }
+
+          if (metadata.programmableConfig?.ruleSet) {
+            remainingAccounts.push({ pubkey: metadata.programmableConfig!.ruleSet, isWritable: false, isSigner: false })
+          } else {
+            remainingAccounts.push({ pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false })
+          }
+
+          remainingAccounts.push({ pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false })
+          remainingAccounts.push({ pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false })
+          remainingAccounts.push({ pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false })
+        }
+      }
 
       return this.program.methods
         .addOrRefillTag({
@@ -102,17 +127,7 @@ export class CupcakeProgram {
           tagAuthority: sprinkleAuthority.publicKey,
           tag: sprinklePDA
         })
-        .remainingAccounts([
-          { pubkey: tokenMint, isWritable: false, isSigner: false },
-          { pubkey: bakeryTokenATA, isWritable: true, isSigner: false },
-          { pubkey: metadataPDA, isWritable: true, isSigner: false },
-          { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
-          { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-          { pubkey: rulesetPDA, isWritable: false, isSigner: false },
-          { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
-          { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
-          { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
-        ])
+        .remainingAccounts(remainingAccounts)
         .signers([this.bakeryAuthorityKeypair])
         .rpc()
     }
