@@ -1,11 +1,13 @@
 import { MasterEditionV2, Metadata } from '@metaplex-foundation/mpl-token-metadata';
 import { Provider, BN, BorshAccountsCoder, Program, Wallet } from '@project-serum/anchor';
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
+import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
 
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   createMintToInstruction,
   MintLayout,
   createInitializeMintInstruction,
@@ -63,6 +65,7 @@ export interface AnchorTagType {
   refillable1Of1?: boolean;
   walletRestrictedFungible?: boolean;
   hotPotato?: boolean;
+  programmableRefillable?: boolean;
 }
 
 export interface Config {
@@ -269,11 +272,45 @@ export class CupcakeInstruction {
 
     const remainingAccounts = [];
 
-    if (args.tagType.walletRestrictedFungible || args.tagType.refillable1Of1 || args.tagType.singleUse1Of1) {
+    if (args.tagType.walletRestrictedFungible || args.tagType.refillable1Of1 || args.tagType.singleUse1Of1 || args.tagType.refillable1Of1) {
       const configTokenAta = await getAssociatedTokenAddress(accounts.tokenMint, authority);
 
       remainingAccounts.push({ pubkey: accounts.tokenMint, isWritable: false, isSigner: false });
       remainingAccounts.push({ pubkey: configTokenAta, isWritable: true, isSigner: false });
+
+      if (args.tagType.programmableRefillable) {
+        // Always add the Metadata and MasterEdition accounts
+        const metadataPDA = await getMetadata(accounts.tokenMint);
+        const masterEditionPDA = await getMasterEdition(accounts.tokenMint);
+        remainingAccounts.push({ pubkey: metadataPDA, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: masterEditionPDA, isWritable: false, isSigner: false });
+
+        // Fetch the metadata account info to check for programmable status
+        const metadata = await Metadata.fromAccountAddress(
+          this.program.provider.connection, 
+          metadataPDA
+        );
+
+        // Check if this is a pNFT
+        if (metadata.programmableConfig) {
+          const tokenRecordPDA = TokenAuth.getTokenRecordPDA(accounts.tokenMint, configTokenAta);
+          remainingAccounts.push({ pubkey: tokenRecordPDA, isWritable: false, isSigner: false });
+        } else {
+          remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        }
+
+        // Check if this is a pNFT without a RuleSet
+        if (metadata.programmableConfig?.ruleSet) {
+          remainingAccounts.push({ pubkey: metadata.programmableConfig.ruleSet, isWritable: false, isSigner: false });
+        } else {
+          remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        }
+
+        // Always add the Programs and SysvarInstructions
+        remainingAccounts.push({ pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false });
+      }
     } else if (args.tagType.hotPotato) {
       const configTokenAta = await getAssociatedTokenAddress(accounts.tokenMint, authority);
 
@@ -453,9 +490,49 @@ export class CupcakeInstruction {
       priorInstructions.push(createAssociatedTokenAccountInstruction(payer, userAta, user, tagObj.tokenMint));
     }
 
-    if (tagObj.tagType.walletRestrictedFungible || tagObj.tagType.refillable1Of1 || tagObj.tagType.singleUse1Of1) {
+    if (tagObj.tagType.walletRestrictedFungible || tagObj.tagType.refillable1Of1 || tagObj.tagType.singleUse1Of1 || tagObj.tagType.programmableRefillable) {
       remainingAccounts.push({ pubkey: configTokenAta, isWritable: true, isSigner: false });
       remainingAccounts.push({ pubkey: userAta, isWritable: true, isSigner: false });
+
+      if (tagObj.tagType.programmableRefillable) {
+        // Always add the BakeryAuthority, TokenMint, Metadata, and MasterEdition accounts
+        const metadataPDA = await getMetadata(tagObj.tokenMint);
+        const masterEditionPDA = await getMasterEdition(tagObj.tokenMint);
+        remainingAccounts.push({ pubkey: configTokenAta, isWritable: true, isSigner: false });
+        remainingAccounts.push({ pubkey: tagObj.tokenMint, isWritable: true, isSigner: false });
+        remainingAccounts.push({ pubkey: metadataPDA, isWritable: true, isSigner: false });
+        remainingAccounts.push({ pubkey: masterEditionPDA, isWritable: true, isSigner: false });
+
+        // Fetch the metadata account info to check for programmable status
+        const metadata = await Metadata.fromAccountAddress(
+          this.program.provider.connection, 
+          metadataPDA
+        );
+
+        // Check if this is a pNFT
+        if (metadata.programmableConfig) {
+          const tokenRecordPDA = TokenAuth.getTokenRecordPDA(tagObj.tokenMint, configTokenAta);
+          const destinationTokenRecordPDA = TokenAuth.getTokenRecordPDA(tagObj.tokenMint, userAta);
+          remainingAccounts.push({ pubkey: tokenRecordPDA, isWritable: false, isSigner: false });
+          remainingAccounts.push({ pubkey: destinationTokenRecordPDA, isWritable: false, isSigner: false });
+        } else {
+          remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+          remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        }
+
+        // Check if this is a pNFT without a RuleSet
+        if (metadata.programmableConfig?.ruleSet) {
+          remainingAccounts.push({ pubkey: metadata.programmableConfig.ruleSet, isWritable: false, isSigner: false });
+        } else {
+          remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        }
+
+        // Always add the Programs and SysvarInstructions
+        remainingAccounts.push({ pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: TOKEN_METADATA_PROGRAM_ID, isWritable: false, isSigner: false });
+        remainingAccounts.push({ pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false });
+      }
     } else if (tagObj.tagType.hotPotato) {
       remainingAccounts.push({ pubkey: tagObj.currentTokenLocation, isWritable: true, isSigner: false });
       remainingAccounts.push({
