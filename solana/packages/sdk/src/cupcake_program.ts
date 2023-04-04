@@ -7,7 +7,6 @@ import { CANDY_MACHINE_ADDRESS, getCandyMachineCreator, getCollectionAuthorityRe
 import { getCluster, WRAPPED_SOL_MINT } from './utils/solana';
 import { sendTransactions, SequenceType, sendPreppedTransactions } from './utils/transaction';
 import { CupcakeInstruction } from './instructions';
-import { AddOrRefillTagAccounts, AddOrRefillTagParams, ClaimTagAccounts, ClaimTagAdditionalArgs, ClaimTagParams, Config, InitializeAccounts, Tag } from './types';
 import { getUserHotPotatoToken } from './pda';
 
 export const PREFIX = 'cupcake';
@@ -16,6 +15,111 @@ export const CUPCAKE_PROGRAM_ID = new PublicKey('cakeGJxEdGpZ3MJP8sM3QypwzuzZpko
 export const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
 export const transactionHelper = { sendPreppedTransactions };
+
+export enum TagType {
+  LimitedOrOpenEdition,
+  SingleUse1Of1,
+  CandyMachineDrop,
+  Refillable1Of1,
+  WalletRestrictedFungible,
+  HotPotato,
+}
+
+export interface AnchorTagType {
+  limitedOrOpenEdition?: boolean;
+  singleUse1Of1?: boolean;
+  candyMachineDrop?: boolean;
+  refillable1Of1?: boolean;
+  walletRestrictedFungible?: boolean;
+  hotPotato?: boolean;
+  programmableUnique?: boolean;
+}
+
+export interface Config {
+  authority: PublicKey;
+  bump: number;
+}
+
+export interface Tag {
+  uid: BN;
+  tagType: AnchorTagType;
+  tagAuthority: PublicKey;
+  config: PublicKey;
+  totalSupply: Number;
+  numClaimed: Number;
+  perUser: Number;
+  minterPays: boolean;
+  tokenMint: PublicKey;
+  candyMachine: PublicKey;
+  whitelistMint: PublicKey;
+  whitelistBurn: PublicKey;
+  bump: Number;
+  currentTokenLocation: PublicKey;
+}
+
+export interface UserInfo {
+  numClaimed: Number;
+  bump: number;
+}
+
+export interface InitializeAccounts {
+  authorityKeypair?: Keypair;
+  authority?: PublicKey;
+}
+
+export interface AddOrRefillTagParams {
+  uid: BN;
+  tagType: AnchorTagType;
+  numClaims: BN;
+  perUser: BN;
+  minterPays: boolean;
+  // candy only
+  pricePerMint?: BN | null;
+  whitelistBurn?: boolean;
+}
+
+export interface AddOrRefillTagAccounts {
+  authority?: PublicKey;
+  authorityKeypair?: Keypair;
+  tagAuthorityKeypair?: Keypair;
+  tagAuthority?: PublicKey;
+  tokenMint?: PublicKey;
+  candyMachine?: PublicKey;
+  whitelistMint?: PublicKey;
+  paymentTokenMint?: PublicKey;
+}
+
+export interface ClaimTagParams {
+  creatorBump?: number;
+  minterPays?: boolean;
+}
+
+export interface ClaimTagAccounts {
+  userKeypair?: Keypair;
+  user?: PublicKey;
+  tagAuthority?: PublicKey;
+  tagAuthorityKeypair?: Keypair;
+  tag: PublicKey;
+  newTokenMint?: PublicKey;
+  newMintAuthorityKeypair?: Keypair;
+  newMintAuthority?: PublicKey;
+  updateAuthority?: PublicKey;
+  candyMachine?: PublicKey;
+  candyMachineWallet?: PublicKey;
+  collectionMint?: PublicKey;
+  collectionMetadata?: PublicKey;
+  collectionMasterEdition?: PublicKey;
+  collectionAuthorityRecord?: PublicKey;
+  candyMachineAuthority?: PublicKey;
+}
+
+export interface ClaimTagAdditionalArgs {
+  tag: Tag;
+  config: Config;
+  nextEdition?: BN;
+  createAta: boolean;
+  candyProgram?: Program;
+}
 
 export class CupcakeProgram {
   id: PublicKey;

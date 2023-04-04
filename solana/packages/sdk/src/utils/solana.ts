@@ -1,4 +1,3 @@
-import fs from "fs";
 import {
   Keypair,
   Connection,
@@ -7,18 +6,13 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
   SystemProgram,
-  BpfLoader,
-  BPF_LOADER_PROGRAM_ID,
+  clusterApiUrl,
 } from "@solana/web3.js";
 import { Provider, Program } from "@project-serum/anchor";
-import { readJSON } from "./misc";
 
 export const WRAPPED_SOL_MINT = new PublicKey(
   "So11111111111111111111111111111111111111112"
 );
-export const keypairFromSecretJson = (file: string) => {
-  return Keypair.fromSecretKey(Uint8Array.from(readJSON(file)));
-};
 
 export const constructAndSendTx = async (
   connection: Connection,
@@ -62,30 +56,6 @@ export const loadAnchorProgram = async (
   }
   return new Program(idl, programId, provider);
 };
-
-export const deployProgram = async (
-  connection: Connection,
-  keypair: Keypair,
-  program: string,
-  address?: string
-) => {
-  const programId = address
-    ? keypairFromSecretJson(address)
-    : Keypair.generate();
-  const successful = await BpfLoader.load(
-    connection,
-    keypair,
-    programId,
-    fs.readFileSync(program),
-    BPF_LOADER_PROGRAM_ID
-  );
-  if (!successful) {
-    throw "Account already created.";
-  }
-  return programId;
-};
-
-import { clusterApiUrl } from "@solana/web3.js";
 
 type Cluster = {
   name: string;
