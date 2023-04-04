@@ -8,7 +8,7 @@ import {
 } from '@metaplex-foundation/mpl-token-metadata';
 import { BN, Program } from '@project-serum/anchor';
 import { constructAndSendTx } from './solana';
-import { TOKEN_METADATA_PROGRAM_ID } from './cupcake_program';
+import { TOKEN_METADATA_PROGRAM_ID } from '../cupcake_program';
 
 export const MPL_METADATA_PROGRAM_ADDRESS = new PublicKey(METADATA_PROGRAM_ADDRESS);
 export const CANDY_MACHINE_ADDRESS = new PublicKey('DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9');

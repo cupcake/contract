@@ -2,9 +2,9 @@ import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
-import { CupcakeProgram } from "../sdk/cucpakeProgram";
-import { createProgrammableNFT, createRuleSetAccount, mintNFT } from "../sdk/programmableAssets";
-import { Bakery } from '../sdk/state/bakery';
+import { CupcakeProgram } from "../wip_sdk/cucpakeProgram";
+import { createProgrammableNFT, createRuleSetAccount, mintNFT } from "../wip_sdk/programmableAssets";
+import { Bakery } from '../wip_sdk/state/bakery';
 
 describe('cupcake', () => {
   anchor.setProvider(anchor.Provider.env());
