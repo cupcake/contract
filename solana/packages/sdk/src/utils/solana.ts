@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from "fs";
 import {
   Keypair,
   Connection,
@@ -9,10 +9,13 @@ import {
   SystemProgram,
   BpfLoader,
   BPF_LOADER_PROGRAM_ID,
-} from '@solana/web3.js';
-import { Provider, Program } from '@project-serum/anchor';
-import { readJSON } from './misc';
-export const WRAPPED_SOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+} from "@solana/web3.js";
+import { Provider, Program } from "@project-serum/anchor";
+import { readJSON } from "./misc";
+
+export const WRAPPED_SOL_MINT = new PublicKey(
+  "So11111111111111111111111111111111111111112"
+);
 export const keypairFromSecretJson = (file: string) => {
   return Keypair.fromSecretKey(Uint8Array.from(readJSON(file)));
 };
@@ -27,7 +30,12 @@ export const constructAndSendTx = async (
   return await sendAndConfirmTransaction(connection, tx, signers);
 };
 
-export const sendSOL = async (connection: Connection, from: Keypair, to: PublicKey, lamports: number) => {
+export const sendSOL = async (
+  connection: Connection,
+  from: Keypair,
+  to: PublicKey,
+  lamports: number
+) => {
   return await constructAndSendTx(
     connection,
     [
@@ -41,7 +49,11 @@ export const sendSOL = async (connection: Connection, from: Keypair, to: PublicK
   );
 };
 
-export const loadAnchorProgram = async (programId: PublicKey, idlFile?: string, provider?: Provider) => {
+export const loadAnchorProgram = async (
+  programId: PublicKey,
+  idlFile?: string,
+  provider?: Provider
+) => {
   let idl: any;
   if (!idlFile) {
     idl = await Program.fetchIdl(programId, provider);
@@ -51,8 +63,15 @@ export const loadAnchorProgram = async (programId: PublicKey, idlFile?: string, 
   return new Program(idl, programId, provider);
 };
 
-export const deployProgram = async (connection: Connection, keypair: Keypair, program: string, address?: string) => {
-  const programId = address ? keypairFromSecretJson(address) : Keypair.generate();
+export const deployProgram = async (
+  connection: Connection,
+  keypair: Keypair,
+  program: string,
+  address?: string
+) => {
+  const programId = address
+    ? keypairFromSecretJson(address)
+    : Keypair.generate();
   const successful = await BpfLoader.load(
     connection,
     keypair,
@@ -61,12 +80,12 @@ export const deployProgram = async (connection: Connection, keypair: Keypair, pr
     BPF_LOADER_PROGRAM_ID
   );
   if (!successful) {
-    throw 'Account already created.';
+    throw "Account already created.";
   }
   return programId;
 };
 
-import { clusterApiUrl } from '@solana/web3.js';
+import { clusterApiUrl } from "@solana/web3.js";
 
 type Cluster = {
   name: string;
@@ -74,16 +93,16 @@ type Cluster = {
 };
 export const CLUSTERS: Cluster[] = [
   {
-    name: 'mainnet-beta',
-    url: 'https://api.metaplex.solana.com/',
+    name: "mainnet-beta",
+    url: "https://api.metaplex.solana.com/",
   },
   {
-    name: 'testnet',
-    url: clusterApiUrl('testnet'),
+    name: "testnet",
+    url: clusterApiUrl("testnet"),
   },
   {
-    name: 'devnet',
-    url: clusterApiUrl('devnet'),
+    name: "devnet",
+    url: clusterApiUrl("devnet"),
   },
 ];
 export const DEFAULT_CLUSTER = CLUSTERS[2];
