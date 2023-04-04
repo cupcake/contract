@@ -1,9 +1,9 @@
 {
-  "name": "cupcake-cli",
-  "version": "0.0.31",
+  "name": "@cupcake-studios/solana-cupcake-program",
+  "version": "1.0.0",
   "typings": "dist/types",
   "main": "./dist/cupcake_program",
-  "repository": "https://github.com/cupcake/contract.git",
+  "repository": "https://github.com/cupcake/contract/solana/packages/sdk.git",
   "author": "0xCold and bhgames",
   "license": "MIT",
   "pkg": {

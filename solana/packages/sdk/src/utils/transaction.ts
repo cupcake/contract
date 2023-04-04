@@ -13,7 +13,6 @@ import {
   TransactionInstruction,
   TransactionSignature,
 } from '@solana/web3.js';
-import log from 'loglevel';
 
 export const DEFAULT_TIMEOUT = 15000;
 
@@ -122,7 +121,7 @@ export async function sendSignedTransaction({
     skipPreflight: true,
   });
 
-  log.debug('Started awaiting confirmation for', txid);
+  console.log('Started awaiting confirmation for', txid);
 
   let done = false;
   (async () => {
@@ -139,13 +138,13 @@ export async function sendSignedTransaction({
     if (!confirmation) throw new Error('Timed out awaiting confirmation on transaction');
 
     if (confirmation.err) {
-      log.error(confirmation.err);
+      console.error(confirmation.err);
       throw new Error('Transaction failed: Custom instruction error');
     }
 
     slot = confirmation?.slot || 0;
   } catch (err) {
-    log.error('Timeout Error caught', err);
+    console.error('Timeout Error caught', err);
     if (err.timeout) {
       throw new Error('Timed out awaiting confirmation on transaction');
     }
@@ -153,7 +152,7 @@ export async function sendSignedTransaction({
     try {
       simulateResult = (await simulateTransaction(connection, signedTransaction, 'single')).value;
     } catch (e) {
-      log.error('Simulate Transaction error', e);
+      console.error('Simulate Transaction error', e);
     }
     if (simulateResult && simulateResult.err) {
       if (simulateResult.logs) {
@@ -166,13 +165,13 @@ export async function sendSignedTransaction({
       }
       throw new Error(JSON.stringify(simulateResult.err));
     }
-    log.error('Got this far.');
+    console.error('Got this far.');
     // throw new Error('Transaction failed');
   } finally {
     done = true;
   }
 
-  log.debug('Latency (ms)', txid, getUnixTs() - startTime);
+  console.log('Latency (ms)', txid, getUnixTs() - startTime);
   return { txid, slot };
 }
 
@@ -224,7 +223,7 @@ async function awaitTransactionSignatureConfirmation(
         return;
       }
       done = true;
-      log.warn('Rejecting for timeout...');
+      console.warn('Rejecting for timeout...');
       reject({ timeout: true });
     }, timeout);
     try {
@@ -238,10 +237,10 @@ async function awaitTransactionSignatureConfirmation(
             confirmations: 0,
           };
           if (result.err) {
-            log.warn('Rejected via websocket', result.err);
+            console.warn('Rejected via websocket', result.err);
             reject(status);
           } else {
-            log.debug('Resolved via websocket', result);
+            console.log('Resolved via websocket', result);
             resolve(status);
           }
         },
@@ -249,7 +248,7 @@ async function awaitTransactionSignatureConfirmation(
       );
     } catch (e) {
       done = true;
-      log.error('WS error in setup', txid, e);
+      console.error('WS error in setup', txid, e);
     }
     while (!done && queryStatus) {
       // eslint-disable-next-line no-loop-func
@@ -259,22 +258,22 @@ async function awaitTransactionSignatureConfirmation(
           status = signatureStatuses && signatureStatuses.value[0];
           if (!done) {
             if (!status) {
-              log.debug('REST null result for', txid, status);
+              console.log('REST null result for', txid, status);
             } else if (status.err) {
-              log.error('REST error for', txid, status);
+              console.error('REST error for', txid, status);
               done = true;
               reject(status.err);
             } else if (!status.confirmations) {
-              log.debug('REST no confirmations for', txid, status);
+              console.log('REST no confirmations for', txid, status);
             } else {
-              log.debug('REST confirmation for', txid, status);
+              console.log('REST confirmation for', txid, status);
               done = true;
               resolve(status);
             }
           }
         } catch (e) {
           if (!done) {
-            log.error('REST connection error: txid', txid, e);
+            console.error('REST connection error: txid', txid, e);
           }
         }
       })();
@@ -285,7 +284,7 @@ async function awaitTransactionSignatureConfirmation(
   //@ts-ignore
   if (connection._subscriptionsByHash[subId]) connection.removeSignatureListener(subId);
   done = true;
-  log.debug('Returning status', status);
+  console.log('Returning status', status);
   return status;
 }
 
