@@ -65,7 +65,7 @@ export interface AnchorTagType {
   refillable1Of1?: boolean;
   walletRestrictedFungible?: boolean;
   hotPotato?: boolean;
-  programmableRefillable?: boolean;
+  programmableUnique?: boolean;
 }
 
 export interface Config {
@@ -278,7 +278,7 @@ export class CupcakeInstruction {
       remainingAccounts.push({ pubkey: accounts.tokenMint, isWritable: false, isSigner: false });
       remainingAccounts.push({ pubkey: configTokenAta, isWritable: true, isSigner: false });
 
-      if (args.tagType.programmableRefillable) {
+      if (args.tagType.programmableUnique) {
         // Always add the Metadata and MasterEdition accounts
         const metadataPDA = await getMetadata(accounts.tokenMint);
         const masterEditionPDA = await getMasterEdition(accounts.tokenMint);
@@ -490,11 +490,11 @@ export class CupcakeInstruction {
       priorInstructions.push(createAssociatedTokenAccountInstruction(payer, userAta, user, tagObj.tokenMint));
     }
 
-    if (tagObj.tagType.walletRestrictedFungible || tagObj.tagType.refillable1Of1 || tagObj.tagType.singleUse1Of1 || tagObj.tagType.programmableRefillable) {
+    if (tagObj.tagType.walletRestrictedFungible || tagObj.tagType.refillable1Of1 || tagObj.tagType.singleUse1Of1 || tagObj.tagType.programmableUnique) {
       remainingAccounts.push({ pubkey: configTokenAta, isWritable: true, isSigner: false });
       remainingAccounts.push({ pubkey: userAta, isWritable: true, isSigner: false });
 
-      if (tagObj.tagType.programmableRefillable) {
+      if (tagObj.tagType.programmableUnique) {
         // Always add the BakeryAuthority, TokenMint, Metadata, and MasterEdition accounts
         const metadataPDA = await getMetadata(tagObj.tokenMint);
         const masterEditionPDA = await getMasterEdition(tagObj.tokenMint);
