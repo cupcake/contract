@@ -1,6 +1,6 @@
 {
   "name": "solana-cupcake-contract",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "typings": "dist/cupcake_program",
   "main": "./dist/cupcake_program",
   "repository": "https://github.com/cupcake/contract.git",
