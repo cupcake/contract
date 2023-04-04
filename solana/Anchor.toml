@@ -7,12 +7,15 @@ cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
 [programs.devnet]
 cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
 
+[programs.mainnet]
+cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
+
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "localnet"
-wallet = "./safe_wallet.json"
+cluster = "mainnet"
+wallet = "./auth.json"
 
 [test.validator]
 url = "https://api.mainnet-beta.solana.com"

@@ -23,6 +23,7 @@ export enum TagType {
   Refillable1Of1,
   WalletRestrictedFungible,
   HotPotato,
+  ProgrammableUnique
 }
 
 export interface AnchorTagType {
