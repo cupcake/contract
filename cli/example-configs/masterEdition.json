@@ -1,8 +1,0 @@
-{
-  "tokenMint": "CgBASFsf6N2rFi9N9Nbivvwo3eF7fjwUZM1WStL6imka",
-  "uid": 4,
-  "numClaims": 11,
-  "perUser": 5,
-  "minterPays": true,
-  "tagType": { "limitedOrOpenEdition": true }
-}

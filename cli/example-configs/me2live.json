@@ -1,8 +1,0 @@
-{
-  "tokenMint": "3KbCwrsMU8VDa9ewgyDbu5CA7iypDKgwo3e2F5woZ3A1",
-  "uid": 52306,
-  "numClaims": 1000,
-  "perUser": 100,
-  "minterPays": false,
-  "tagType": { "limitedOrOpenEdition": true }
-}

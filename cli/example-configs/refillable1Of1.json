@@ -1,8 +1,0 @@
-{
-  "tokenMint": "GreAhTReRChvjfnAoPsJha9t9L6JvBfn8J88U6qfdoDx",
-  "uid": 5230,
-  "numClaims": 2,
-  "perUser": 3,
-  "minterPays": true,
-  "tagType": { "refillable1Of1": true }
-}
