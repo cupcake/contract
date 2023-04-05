@@ -137,6 +137,16 @@ it('Tests for pNFTs with Pass rules', async () => {
   );
   console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
 
+  const reBakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
+    "refillable1Of1",
+    sprinkleUID, 
+    programmableNFTMint, 
+    1, 
+    1, 
+    sprinkleAuthority
+  );
+  console.log('reBakeSprinkleTxHash', reBakeSprinkleTxHash);
+
   const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
     sprinkleUID, 
     user.publicKey,

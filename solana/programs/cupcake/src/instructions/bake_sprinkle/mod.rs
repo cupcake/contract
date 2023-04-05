@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
 use mpl_token_auth_rules::payload::Payload;
 use mpl_token_metadata::processor::AuthorizationData;
-use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
+use mpl_token_metadata::state::{Metadata, TokenMetadataAccount, TokenRecord};
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
@@ -10,7 +10,7 @@ use crate::utils::{assert_is_ata, assert_keys_equal};
 use anchor_lang::solana_program::{program::invoke_signed, system_program};
 use anchor_spl::token::*;
 use mpl_token_metadata;
-use mpl_token_metadata::instruction::freeze_delegated_account;
+use mpl_token_metadata::instruction::{freeze_delegated_account, MetadataInstruction, DelegateArgs, RevokeArgs};
 
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -206,8 +206,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                   let token_metadata_program = &ctx.remaining_accounts[7];
                   let instructions_sysvar = &ctx.remaining_accounts[8];
 
-                  // We need to CPI to TokenMetadataProgram to call Delegate for pNFTs, 
-                  // which wraps the normal TokenProgram Approve call.
                   let account_metas = vec![
                       AccountMeta::new_readonly(token_metadata_program.key(), false),
                       AccountMeta::new_readonly(config.key(), false),
@@ -240,14 +238,65 @@ pub fn handler<'a, 'b, 'c, 'info>(
                       token_ruleset_program.clone(),
                       token_ruleset.clone()
                   ];
-                  
-                  let ix_data = 
-                      mpl_token_metadata::instruction::MetadataInstruction::Delegate(
-                          mpl_token_metadata::instruction::DelegateArgs::TransferV1 { 
-                              amount: 1, 
-                              authorization_data: Some(AuthorizationData { payload: Payload::new() })
-                          }
+
+                  // We need to revoke the active delegation for the token record if it exists
+                  let token_record = TokenRecord::from_account_info(&token_record_info)?;
+                  if token_record.delegate.is_some() {
+                      msg!("has delegate");
+                      let revoke_account_metas = vec![
+                          AccountMeta::new_readonly(token_metadata_program.key(), false),
+                          AccountMeta::new_readonly(config.key(), false),
+                          AccountMeta::new(token_metadata_info.key(), false),
+                          AccountMeta::new_readonly(token_edition.key(), false),
+                          AccountMeta::new(token_record_info.key(), false),
+                          AccountMeta::new_readonly(token_mint.key(), false),
+                          AccountMeta::new(token.key(), false),
+                          AccountMeta::new_readonly(ctx.accounts.authority.key(), true),
+                          AccountMeta::new_readonly(ctx.accounts.payer.key(), true),
+                          AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                          AccountMeta::new_readonly(instructions_sysvar.key(), false),
+                          AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+                          AccountMeta::new_readonly(token_ruleset_program.key(), false),
+                          AccountMeta::new_readonly(token_ruleset.key(), false),
+                      ];
+                      let revoke_account_infos = [
+                          token_metadata_program.clone(),
+                          config.to_account_info(),
+                          token_metadata_info.clone(),
+                          token_edition.clone(),
+                          token_record_info.clone(),
+                          token_mint.clone(),
+                          token.clone(),
+                          ctx.accounts.authority.to_account_info(),
+                          ctx.accounts.payer.to_account_info(),
+                          ctx.accounts.system_program.to_account_info(),
+                          instructions_sysvar.clone(),
+                          ctx.accounts.token_program.to_account_info(),
+                          token_ruleset_program.clone(),
+                          token_ruleset.clone()
+                      ];
+                      let revoke_ix_data = MetadataInstruction::Revoke(
+                          RevokeArgs::TransferV1
                       );
+                      invoke_signed(
+                          &Instruction {  
+                              program_id: token_metadata_program.key(),
+                              accounts: revoke_account_metas,
+                              data: revoke_ix_data.try_to_vec().unwrap(),
+                          }, 
+                          &revoke_account_infos,
+                          &[&config_seeds[..]],
+                      )?;
+                  } else {
+                    msg!("no delegate");
+                  }
+                  
+                  let ix_data = MetadataInstruction::Delegate(
+                      DelegateArgs::TransferV1 { 
+                          amount: 1, 
+                          authorization_data: Some(AuthorizationData { payload: Payload::new() })
+                      }
+                  );
                       
                   invoke_signed(
                       &Instruction {  
