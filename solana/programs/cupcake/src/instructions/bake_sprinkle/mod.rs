@@ -155,13 +155,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
       | TagType::HotPotato => {
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
-          let token_metadata_info = &ctx.remaining_accounts[2];
-          let token_edition = &ctx.remaining_accounts[3];
-          let token_record_info = &ctx.remaining_accounts[4];
-          let token_ruleset = &ctx.remaining_accounts[5];
-          let token_ruleset_program = &ctx.remaining_accounts[6];
-          let token_metadata_program = &ctx.remaining_accounts[7];
-          let instructions_sysvar = &ctx.remaining_accounts[8];
 
           // Check that the provided ATA is legitimate.
           assert_is_ata(
@@ -175,8 +168,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
           let token_account: Account<TokenAccount> = Account::try_from(token)?;
           
-          let token_metadata = Metadata::from_account_info(token_metadata_info)?;
-          let is_programmable = token_metadata.programmable_config != None;
+          let mut is_programmable = false;
+          if ctx.remaining_accounts.len() > 2 {
+              let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[2])?;
+              is_programmable = token_metadata.programmable_config != None;
+          }
  
           require!(
               !is_programmable || tag_type != TagType::HotPotato,
@@ -202,6 +198,14 @@ pub fn handler<'a, 'b, 'c, 'info>(
               },
 
               true => {
+                  let token_metadata_info = &ctx.remaining_accounts[2];
+                  let token_edition = &ctx.remaining_accounts[3];
+                  let token_record_info = &ctx.remaining_accounts[4];
+                  let token_ruleset = &ctx.remaining_accounts[5];
+                  let token_ruleset_program = &ctx.remaining_accounts[6];
+                  let token_metadata_program = &ctx.remaining_accounts[7];
+                  let instructions_sysvar = &ctx.remaining_accounts[8];
+
                   // We need to CPI to TokenMetadataProgram to call Delegate for pNFTs, 
                   // which wraps the normal TokenProgram Approve call.
                   let account_metas = vec![

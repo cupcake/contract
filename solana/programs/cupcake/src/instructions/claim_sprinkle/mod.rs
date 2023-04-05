@@ -357,20 +357,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
         | TagType::ProgrammableUnique => {
             let token = &ctx.remaining_accounts[0];
             let user_ata = &ctx.remaining_accounts[1];
-            let bakery_authority = &ctx.remaining_accounts[2];
-            let token_mint = &ctx.remaining_accounts[3];
-            let token_metadata_info = &ctx.remaining_accounts[4];
-            let token_edition = &ctx.remaining_accounts[5];
-            let token_record_info = &ctx.remaining_accounts[6];
-            let destination_token_record = &ctx.remaining_accounts[7];
-            let token_ruleset = &ctx.remaining_accounts[8];
-            let token_auth_program = &ctx.remaining_accounts[9];
-            let associated_token_program = &ctx.remaining_accounts[10];
-            let token_metadata_program = &ctx.remaining_accounts[11];
-            let instructions_sysvar = &ctx.remaining_accounts[12];
 
-            let token_metadata = Metadata::from_account_info(token_metadata_info)?;
-            let is_programmable = token_metadata.programmable_config != None;
+            let mut is_programmable = false;
+            if ctx.remaining_accounts.len() > 2 {
+                let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[4])?;
+                is_programmable = token_metadata.programmable_config != None;
+            }
 
             // Ensure both the Bakery and User ATAs are legitimate.
             assert_is_ata(
@@ -404,6 +396,17 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
             match is_programmable {
                 true => {
+                    let bakery_authority = &ctx.remaining_accounts[2];
+                    let token_mint = &ctx.remaining_accounts[3];
+                    let token_metadata_info = &ctx.remaining_accounts[4];
+                    let token_edition = &ctx.remaining_accounts[5];
+                    let token_record_info = &ctx.remaining_accounts[6];
+                    let destination_token_record = &ctx.remaining_accounts[7];
+                    let token_ruleset = &ctx.remaining_accounts[8];
+                    let token_auth_program = &ctx.remaining_accounts[9];
+                    let associated_token_program = &ctx.remaining_accounts[10];
+                    let token_metadata_program = &ctx.remaining_accounts[11];
+                    let instructions_sysvar = &ctx.remaining_accounts[12];
                     // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
                     // which wraps the normal TokenProgram Transfer call.
                     let account_metas = vec![
