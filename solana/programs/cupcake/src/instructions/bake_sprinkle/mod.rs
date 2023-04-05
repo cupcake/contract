@@ -128,11 +128,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
       // SingleUse1Of1s and HotPotatos can only have a total_supply of 1.
       TagType::SingleUse1Of1 | TagType::HotPotato => 1,
 
-      // Increment total_supply for Refillable1Of1s, if 
-      // they are being re-baked with a new token.
+      // Only increment total supply if the sprinkle is empty
       TagType::Refillable1Of1 => {
-          if ctx.remaining_accounts[0].key() != tag.token_mint
-              && tag.num_claimed == tag.total_supply
+          if tag.num_claimed == tag.total_supply
           {
               tag.total_supply
                   .checked_add(1)
