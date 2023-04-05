@@ -82,7 +82,7 @@ it('Tests for pNFTs with no ruleset', async () => {
 
   try {
   const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-    "programmableUnique",
+    "refillable1Of1",
     sprinkleUID, 
     programmableNFTMint, 
     1, 
@@ -128,7 +128,7 @@ it('Tests for pNFTs with Pass rules', async () => {
 
   try{
   const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-    "programmableUnique",
+    "refillable1Of1",
     sprinkleUID, 
     programmableNFTMint, 
     1, 
@@ -186,7 +186,7 @@ it('Tests for pNFTs with Amount rules', async () => {
 
   try{
   const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-    "programmableUnique",
+    "refillable1Of1",
     sprinkleUID, 
     programmableNFTMint, 
     1, 
@@ -241,7 +241,7 @@ it('Tests for pNFTs with Amount rules', async () => {
 
     try{
     const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-      "programmableUnique",
+      "refillable1Of1",
       sprinkleUID, 
       programmableNFTMint, 
       1, 
@@ -296,7 +296,7 @@ it('Tests for pNFTs with Amount rules', async () => {
       console.log("programmableNFTMint", programmableNFTMint.toString());
 
       const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-        "programmableUnique",
+        "refillable1Of1",
         sprinkleUID, 
         programmableNFTMint, 
         1, 
@@ -344,7 +344,7 @@ it('Tests for pNFTs with Amount rules', async () => {
     console.log("programmableNFTMint", programmableNFTMint.toString());
 
     const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-      "programmableUnique",
+      "refillable1Of1",
       sprinkleUID, 
       programmableNFTMint, 
       1, 
@@ -392,7 +392,7 @@ it('Tests for pNFTs with Amount rules', async () => {
     console.log("programmableNFTMint", programmableNFTMint.toString());
 
     const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-      "programmableUnique",
+      "refillable1Of1",
       sprinkleUID, 
       programmableNFTMint, 
       1, 

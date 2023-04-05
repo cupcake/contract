@@ -52,4 +52,7 @@ pub enum ErrorCode {
 
     #[msg("This pNFT rule is not supported by Cupcake yet.")]
     ProgrammableRuleNotSupported,
+
+    #[msg("Hot Potatos can not be pNFTs")]
+    HotPotatoCanNotBeProgrammable
 }

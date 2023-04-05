@@ -14,7 +14,7 @@ cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "mainnet"
+cluster = "localnet"
 wallet = "./auth.json"
 
 [test.validator]
