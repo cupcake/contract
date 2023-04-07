@@ -1,38 +1,14 @@
 import { Program, BN } from "@project-serum/anchor";
 import { Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import { Cupcake } from '../target/types/cupcake';
-import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
-import * as TokenMetadata from "@metaplex-foundation/mpl-token-metadata"
-import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { getTokenRecordPDA } from "./programmableAssets";
 import { Bakery } from "./state/bakery";
-import { Sprinkle } from "./state/sprinkle";
+import { Sprinkle, SprinkleX } from "./state/sprinkle";
 import { UserInfo } from "./state/userInfo";
+import { BakeTokenApprovalSprinkleData } from "./instructions/bakeSprinkle/tokenApproval";
+import { ClaimTokenTransferSprinkleData } from "./instructions/claimSprinkle/tokenTransfer";
+import { ClaimEditionPrinterSprinkleData } from "./instructions/claimSprinkle/editionPrinter";
 
 export const PDA_PREFIX = 'cupcake';
-
-export async function getMetadataPDA(tokenMint: PublicKey) {
-  return (await PublicKey.findProgramAddress(
-    [
-      Buffer.from("metadata"), 
-      TokenMetadata.PROGRAM_ID.toBuffer(), 
-      tokenMint.toBuffer()
-    ],
-    TokenMetadata.PROGRAM_ID
-  ))[0]
-}
-
-export async function getMasterEditionPDA(tokenMint: PublicKey) {
-  return (await PublicKey.findProgramAddress(
-    [
-      Buffer.from("metadata"), 
-      TokenMetadata.PROGRAM_ID.toBuffer(), 
-      tokenMint.toBuffer(),
-      Buffer.from("edition")
-    ],
-    TokenMetadata.PROGRAM_ID
-  ))[0]
-}
 
 export class CupcakeProgram {
     program: Program<Cupcake>;
@@ -65,22 +41,17 @@ export class CupcakeProgram {
         this.program.programId
       );
 
-      const bakeryTokenATA = getAssociatedTokenAddressSync(
-        tokenMint, 
-        this.bakeryAuthorityKeypair.publicKey
-      );
-
-      const metadataPDA = await getMetadataPDA(tokenMint);
-      const masterEditionPDA = await getMasterEditionPDA(tokenMint);
-      const tokenRecordPDA = await getTokenRecordPDA(tokenMint, bakeryTokenATA);
-
-      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
-        this.program.provider.connection, 
-        metadataPDA
-      );
-      const isProgrammable = !!metadata.programmableConfig
-      const hasRuleset = !!metadata.programmableConfig?.ruleSet
-      console.log(isProgrammable, hasRuleset, "baking")
+      const remainingAccounts = [];
+      switch (sprinkleType) {        
+        default:
+          const tokenApprovalRemainingAccounts = await BakeTokenApprovalSprinkleData.buildRemainingAccounts(
+            this.program.provider.connection, 
+            this.bakeryAuthorityKeypair.publicKey,
+            tokenMint, 
+          );
+          remainingAccounts.push(...tokenApprovalRemainingAccounts);
+          break;
+      }
 
       return this.program.methods
         .addOrRefillTag({
@@ -99,21 +70,7 @@ export class CupcakeProgram {
           tagAuthority: sprinkleAuthority.publicKey,
           tag: sprinklePDA
         })
-        .remainingAccounts([
-          { pubkey: tokenMint, isWritable: false, isSigner: false },
-          { pubkey: bakeryTokenATA, isWritable: true, isSigner: false },
-          { pubkey: metadataPDA, isWritable: true, isSigner: false },
-          { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
-          { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-          { 
-            pubkey: hasRuleset ? metadata.programmableConfig!.ruleSet : TokenMetadata.PROGRAM_ID, 
-            isWritable: false, 
-            isSigner: false 
-          },
-          { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
-          { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
-          { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
-        ])
+        .remainingAccounts(remainingAccounts)
         .signers([this.bakeryAuthorityKeypair])
         .rpc()
     }
@@ -125,89 +82,59 @@ export class CupcakeProgram {
         sprinkleUID, 
         this.program.programId
       );
-      const sprinkleState = await this.program.account.tag.fetch(await sprinklePDA);
-      const token = getAssociatedTokenAddressSync(
-        sprinkleState.tokenMint, 
-        this.bakeryAuthorityKeypair.publicKey
-      );
-      const userATA = getAssociatedTokenAddressSync(
-        sprinkleState.tokenMint, 
-        user
-      );
+      const sprinkleState = await this.program.account.tag.fetch(sprinklePDA) as SprinkleX;
       const userInfoPDA = await UserInfo.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         user,
         this.program.programId
       );
-      const metadataPDA = await getMetadataPDA(sprinkleState.tokenMint);
-      const masterEditionPDA = await getMasterEditionPDA(sprinkleState.tokenMint);
-      const tokenRecordPDA = await getTokenRecordPDA(sprinkleState.tokenMint, token);
-      const destinationTokenRecordPDA = await getTokenRecordPDA(sprinkleState.tokenMint, userATA);
 
-      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
-        this.program.provider.connection, 
-        await metadataPDA
-      );
-      const isProgrammable = !!metadata.programmableConfig
-      const hasRuleset = !!metadata.programmableConfig?.ruleSet
+      const remainingAccounts = [];
+      const preInstructions = [];
+      const extraSigners = [];
+
+      // EditionPrinter
+      if (sprinkleState.tagType.limitedOrOpenEdition) {    
+        console.log("Lol")
+        const editionPrinterClaimData = await ClaimEditionPrinterSprinkleData.construct(
+          this.program.provider.connection, 
+          this.bakeryAuthorityKeypair.publicKey,
+          user, 
+          sprinkleState
+        );
+        remainingAccounts.push(...editionPrinterClaimData.remainingAccounts);
+        preInstructions.push(...editionPrinterClaimData.preInstructions);
+        extraSigners.push(...editionPrinterClaimData.extraSigners);
+      } 
+      
+      // All other types
+      else {
+        const tokenTransferClaimData = await ClaimTokenTransferSprinkleData.construct(
+          this.program.provider.connection, 
+          this.bakeryAuthorityKeypair.publicKey,
+          user, 
+          sprinkleState
+        );
+        remainingAccounts.push(...tokenTransferClaimData.remainingAccounts);
+        preInstructions.push(...tokenTransferClaimData.preInstructions);
+      }
 
       return this.program.methods
-      .claimTag(0)
-      .accounts({
-        user,
-        authority: this.bakeryAuthorityKeypair.publicKey,
-        payer: this.bakeryAuthorityKeypair.publicKey,
-        config: this.bakeryPDA,
-        tagAuthority: sprinkleAuthorityKeypair.publicKey,
-        tag: sprinklePDA,
-        userInfo: userInfoPDA,
-      })
-      .remainingAccounts([
-        // Base transfer accounts
-        { pubkey: token, isWritable: true, isSigner: false },
-        { pubkey: userATA, isWritable: true, isSigner: false },
-        // Bakery auth
-        { pubkey: this.bakeryAuthorityKeypair.publicKey, isWritable: false, isSigner: false },
-        // Mint
-        { pubkey: sprinkleState.tokenMint, isWritable: false, isSigner: false },
-        // Metadata + edition
-        { pubkey: metadataPDA, isWritable: true, isSigner: false },
-        { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
-        // Current token location record
-        { 
-          pubkey: isProgrammable ? tokenRecordPDA : TokenMetadata.PROGRAM_ID, 
-          isWritable: isProgrammable, 
-          isSigner: false 
-        },
-        // Destination token record
-        { 
-          pubkey: isProgrammable ? destinationTokenRecordPDA : TokenMetadata.PROGRAM_ID, 
-          isWritable: isProgrammable, 
-          isSigner: false 
-        },
-        // Token ruleset
-        { 
-          pubkey: hasRuleset ? metadata.programmableConfig!.ruleSet : TokenMetadata.PROGRAM_ID, 
-          isWritable: false, 
-          isSigner: false 
-        },
-        // Programs / Sysvars
-        { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
-        { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
-        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
-      ])
-      .preInstructions([
-        createAssociatedTokenAccountInstruction(
-          this.bakeryAuthorityKeypair.publicKey, 
-          userATA, 
-          user, 
-          sprinkleState.tokenMint
-        )
-      ])
-      .signers([this.bakeryAuthorityKeypair, sprinkleAuthorityKeypair])
-      .rpc()
+        .claimTag(0)
+        .accounts({
+          user,
+          authority: this.bakeryAuthorityKeypair.publicKey,
+          payer: this.bakeryAuthorityKeypair.publicKey,
+          config: this.bakeryPDA,
+          tagAuthority: sprinkleAuthorityKeypair.publicKey,
+          tag: sprinklePDA,
+          userInfo: userInfoPDA,
+        })
+        .remainingAccounts(remainingAccounts)
+        .preInstructions(preInstructions)
+        .signers([...extraSigners, this.bakeryAuthorityKeypair, sprinkleAuthorityKeypair])
+        .rpc()
     }
 
 

@@ -8,9 +8,6 @@ use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*};
 use anchor_spl::token::*;
-use mpl_token_metadata;
-use mpl_token_metadata::instruction::freeze_delegated_account;
-
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct AddOrRefillTagParams {

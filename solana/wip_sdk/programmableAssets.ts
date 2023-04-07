@@ -2,11 +2,47 @@ import { Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, Transaction } from "@so
 import { BN, Provider } from "@project-serum/anchor";
 import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
 import * as TokenMetadata from "@metaplex-foundation/mpl-token-metadata"
-import { decode, encode } from "@msgpack/msgpack";
+import { encode } from "@msgpack/msgpack";
 import { createAssociatedTokenAccount, createMint, mintTo, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { getMasterEditionPDA, getMetadataPDA } from "./cucpakeProgram";
 import { createCreateInstruction, createCreateMasterEditionV3Instruction, createCreateMetadataAccountV3Instruction, createMintInstruction, MasterEditionHasPrintsError, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
+
+export async function getMetadataPDA(tokenMint: PublicKey) {
+  return (await PublicKey.findProgramAddress(
+    [
+      Buffer.from("metadata"), 
+      TokenMetadata.PROGRAM_ID.toBuffer(), 
+      tokenMint.toBuffer()
+    ],
+    TokenMetadata.PROGRAM_ID
+  ))[0]
+}
+
+export async function getMasterEditionPDA(tokenMint: PublicKey) {
+  return (await PublicKey.findProgramAddress(
+    [
+      Buffer.from("metadata"), 
+      TokenMetadata.PROGRAM_ID.toBuffer(), 
+      tokenMint.toBuffer(),
+      Buffer.from("edition")
+    ],
+    TokenMetadata.PROGRAM_ID
+  ))[0]
+}
+
+export async function getEditionMarkPDA(tokenMint: PublicKey, edition: number) {
+  const editionNumber = Math.floor(edition / 248);
+  return (await PublicKey.findProgramAddress(
+    [
+      Buffer.from("metadata"), 
+      TokenMetadata.PROGRAM_ID.toBuffer(), 
+      tokenMint.toBuffer(),
+      Buffer.from("edition"),
+      Buffer.from(editionNumber.toString())
+    ],
+    TokenMetadata.PROGRAM_ID
+  ))[0]
+}
 
 export async function getTokenRecordPDA(tokenMint: PublicKey, associatedToken: PublicKey) {
   return (await PublicKey.findProgramAddress(

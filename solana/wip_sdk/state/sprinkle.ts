@@ -4,7 +4,40 @@ import { BN } from "@project-serum/anchor";
 import { CUPCAKE_PROGRAM_ID } from "..";
 
 export enum SprinkleType {
+  LimitedOrOpenEdition,
+  SingleUse1Of1,
+  CandyMachineDrop,
+  Refillable1Of1,
+  WalletRestrictedFungible,
+  HotPotato,
+  ProgrammableUnique
+}
 
+export interface AnchorSprinkleType {
+  limitedOrOpenEdition?: boolean;
+  singleUse1Of1?: boolean;
+  candyMachineDrop?: boolean;
+  refillable1Of1?: boolean;
+  walletRestrictedFungible?: boolean;
+  hotPotato?: boolean;
+  programmableUnique?: boolean;
+}
+
+export interface SprinkleX {
+  uid: BN;
+  tagType: AnchorSprinkleType;
+  tagAuthority: PublicKey;
+  config: PublicKey;
+  totalSupply: Number;
+  numClaimed: Number;
+  perUser: Number;
+  minterPays: boolean;
+  tokenMint: PublicKey;
+  candyMachine: PublicKey;
+  whitelistMint: PublicKey;
+  whitelistBurn: boolean;
+  bump: Number;
+  currentTokenLocation: PublicKey;
 }
 
 export class Sprinkle {
