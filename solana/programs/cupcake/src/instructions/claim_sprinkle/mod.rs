@@ -11,6 +11,7 @@ use mpl_token_metadata::instruction::{
     mint_new_edition_from_master_edition_via_token
 };
 use mpl_token_metadata::processor::AuthorizationData;
+use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
 use crate::state::PDA_PREFIX;
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
@@ -357,6 +358,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let token = &ctx.remaining_accounts[0];
             let user_ata = &ctx.remaining_accounts[1];
 
+            let mut is_programmable = false;
+            if ctx.remaining_accounts.len() > 2 {
+                let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[4])?;
+                is_programmable = token_metadata.programmable_config != None;
+            }
+
             // Ensure both the Bakery and User ATAs are legitimate.
             assert_is_ata(
                 &token,
@@ -387,89 +394,80 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     .ok_or(ErrorCode::NumericalOverflowError)?,
             );
 
-            // ProgrammableNFTs require the Metadata, Edition, and MetadataProgram accounts of the NFT
-            // to be referenced in transfers.
-            //
-            // These should be appended to the remaining_accounts array when claiming a Sprinkle with
-            // one of these assets, or the default transfer will be used and cause an error.
-            match tag_type {
-              TagType::ProgrammableUnique => {
-                  msg!("programmable");
-                  // If more than 9 accounts are passed, just ignore the extras.
-                  let bakery_authority = &ctx.remaining_accounts[2];
-                  let token_mint = &ctx.remaining_accounts[3];
-                  let token_metadata_info = &ctx.remaining_accounts[4];
-                  let token_edition = &ctx.remaining_accounts[5];
-                  let token_record_info = &ctx.remaining_accounts[6];
-                  let destination_token_record = &ctx.remaining_accounts[7];
-                  let token_ruleset = &ctx.remaining_accounts[8];
-                  let token_auth_program = &ctx.remaining_accounts[9];
-                  let associated_token_program = &ctx.remaining_accounts[10];
-                  let token_metadata_program = &ctx.remaining_accounts[11];
-                  let instructions_sysvar = &ctx.remaining_accounts[12];
+            match is_programmable {
+                true => {
+                    let bakery_authority = &ctx.remaining_accounts[2];
+                    let token_mint = &ctx.remaining_accounts[3];
+                    let token_metadata_info = &ctx.remaining_accounts[4];
+                    let token_edition = &ctx.remaining_accounts[5];
+                    let token_record_info = &ctx.remaining_accounts[6];
+                    let destination_token_record = &ctx.remaining_accounts[7];
+                    let token_ruleset = &ctx.remaining_accounts[8];
+                    let token_auth_program = &ctx.remaining_accounts[9];
+                    let associated_token_program = &ctx.remaining_accounts[10];
+                    let token_metadata_program = &ctx.remaining_accounts[11];
+                    let instructions_sysvar = &ctx.remaining_accounts[12];
+                    // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
+                    // which wraps the normal TokenProgram Transfer call.
+                    let account_metas = vec![
+                        AccountMeta::new(token.key(), false),
+                        AccountMeta::new_readonly(bakery_authority.key(), false),
+                        AccountMeta::new(user_ata.key(), false),
+                        AccountMeta::new_readonly(user.key(), false),
+                        AccountMeta::new_readonly(token_mint.key(), false),
+                        AccountMeta::new(token_metadata_info.key(), false),
+                        AccountMeta::new(token_edition.key(), false),
+                        AccountMeta::new(token_record_info.key(), false),
+                        AccountMeta::new(destination_token_record.key(), false),
+                        AccountMeta::new_readonly(config.key(), true),
+                        AccountMeta::new(payer.key(), true),
+                        AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+                        AccountMeta::new_readonly(instructions_sysvar.key(), false),
+                        AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
+                        AccountMeta::new_readonly(associated_token_program.key(), false),
+                        AccountMeta::new_readonly(token_auth_program.key(), false),
+                        AccountMeta::new_readonly(token_ruleset.key(), false),
+                    ];
+                    let account_infos = [
+                        token.clone(),
+                        bakery_authority.to_account_info(),
+                        user_ata.clone(),
+                        user.to_account_info(),
+                        token_mint.clone(),
+                        token_metadata_info.clone(),
+                        token_edition.clone(),
+                        token_record_info.clone(),
+                        destination_token_record.clone(),
+                        config.to_account_info(),
+                        payer.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                        instructions_sysvar.clone(),
+                        ctx.accounts.token_program.to_account_info(),
+                        associated_token_program.clone(),
+                        token_auth_program.clone(),
+                        token_ruleset.clone(),
+                    ];
 
-                  // We need to CPI to TokenMetadataProgram to call Transfer for pNFTs, 
-                  // which wraps the normal TokenProgram Transfer call.
-                  let account_metas = vec![
-                      AccountMeta::new(token.key(), false),
-                      AccountMeta::new_readonly(bakery_authority.key(), false),
-                      AccountMeta::new(user_ata.key(), false),
-                      AccountMeta::new_readonly(user.key(), false),
-                      AccountMeta::new_readonly(token_mint.key(), false),
-                      AccountMeta::new(token_metadata_info.key(), false),
-                      AccountMeta::new(token_edition.key(), false),
-                      AccountMeta::new(token_record_info.key(), false),
-                      AccountMeta::new(destination_token_record.key(), false),
-                      AccountMeta::new_readonly(config.key(), true),
-                      AccountMeta::new(payer.key(), true),
-                      AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
-                      AccountMeta::new_readonly(instructions_sysvar.key(), false),
-                      AccountMeta::new_readonly(ctx.accounts.token_program.key(), false),
-                      AccountMeta::new_readonly(associated_token_program.key(), false),
-                      AccountMeta::new_readonly(token_auth_program.key(), false),
-                      AccountMeta::new_readonly(token_ruleset.key(), false),
-                  ];
-                  let account_infos = [
-                      token.clone(),
-                      bakery_authority.to_account_info(),
-                      user_ata.clone(),
-                      user.to_account_info(),
-                      token_mint.clone(),
-                      token_metadata_info.clone(),
-                      token_edition.clone(),
-                      token_record_info.clone(),
-                      destination_token_record.clone(),
-                      config.to_account_info(),
-                      payer.to_account_info(),
-                      ctx.accounts.system_program.to_account_info(),
-                      instructions_sysvar.clone(),
-                      ctx.accounts.token_program.to_account_info(),
-                      associated_token_program.clone(),
-                      token_auth_program.clone(),
-                      token_ruleset.clone(),
-                  ];
+                    let ix_data = 
+                        mpl_token_metadata::instruction::MetadataInstruction::Transfer(
+                            mpl_token_metadata::instruction::TransferArgs::V1 { 
+                                amount: 1, 
+                                authorization_data: Some(AuthorizationData { payload: Payload::new() }) 
+                            }
+                        );
+                        
+                    invoke_signed(
+                        &Instruction {  
+                            program_id: token_metadata_program.key(),
+                            accounts: account_metas,
+                            data: ix_data.try_to_vec().unwrap(),
+                        }, 
+                        &account_infos,
+                        &[&config_seeds[..]],
+                    )?
+                },
 
-                  let ix_data = 
-                      mpl_token_metadata::instruction::MetadataInstruction::Transfer(
-                          mpl_token_metadata::instruction::TransferArgs::V1 { 
-                              amount: 1, 
-                              authorization_data: Some(AuthorizationData { payload: Payload::new() }) 
-                          }
-                      );
-                      
-                  invoke_signed(
-                      &Instruction {  
-                          program_id: token_metadata_program.key(),
-                          accounts: account_metas,
-                          data: ix_data.try_to_vec().unwrap(),
-                      }, 
-                      &account_infos,
-                      &[&config_seeds[..]],
-                  )?
-                }
-
-                // SingleUse1Of1, Refillable1Of1, WalletRestrictedFungible
-                _ => {
+                false => {
                     let cpi_accounts = token::Transfer {
                         from: token.clone(),
                         to: user_ata.clone(),
@@ -484,7 +482,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         amount_to_claim
                     )?
                 }
-            };
+            }
         }
 
         TagType::HotPotato => {

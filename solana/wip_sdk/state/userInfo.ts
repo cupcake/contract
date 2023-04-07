@@ -13,8 +13,8 @@ export class UserInfo {
 
   }
 
-  static PDA(bakeryAuthority: PublicKey, sprinkleUID: BN, user: PublicKey, programId = CUPCAKE_PROGRAM_ID) {
-    return PublicKey.findProgramAddressSync(
+  static async PDA(bakeryAuthority: PublicKey, sprinkleUID: BN, user: PublicKey, programId = CUPCAKE_PROGRAM_ID) {
+    return (await PublicKey.findProgramAddress(
       [
         Buffer.from(PDA_PREFIX), 
         bakeryAuthority.toBuffer(), 
@@ -22,6 +22,6 @@ export class UserInfo {
         user.toBuffer()
       ],
       programId
-    )[0]
+    ))[0]
   }
 }

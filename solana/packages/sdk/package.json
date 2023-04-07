@@ -1,7 +1,7 @@
 {
-  "name": "cupcake-cli",
-  "version": "0.0.31",
-  "typings": "dist/types",
+  "name": "solana-cupcake-contract",
+  "version": "1.0.3",
+  "typings": "dist/cupcake_program",
   "main": "./dist/cupcake_program",
   "repository": "https://github.com/cupcake/contract.git",
   "author": "0xCold and bhgames",
@@ -15,14 +15,15 @@
   "dependencies": {
     "@metaplex-foundation/mpl-token-auth-rules": "^1.2.0",
     "@metaplex-foundation/mpl-token-metadata": "^2.9.1",
+    "@msgpack/msgpack": "^3.0.0-beta2",
     "@project-serum/anchor": "0.21.0",
     "@solana/spl-token": "^0.3.7",
-    "@solana/web3.js": "1.75.0",
+    "@solana/web3.js": "1.32.0",
     "loglevel": "^1.8.1",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.3"
   },
   "resolutions": {
-    "@solana/web3.js": "1.75.0"
+    "@solana/web3.js": "1.32.0"
   }
 }

@@ -8,8 +8,8 @@ import { getMasterEditionPDA, getMetadataPDA } from "./cucpakeProgram";
 import { createCreateInstruction, createCreateMasterEditionV3Instruction, createCreateMetadataAccountV3Instruction, createMintInstruction, MasterEditionHasPrintsError, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { ASSOCIATED_PROGRAM_ID } from "@project-serum/anchor/dist/cjs/utils/token";
 
-export function getTokenRecordPDA(tokenMint: PublicKey, associatedToken: PublicKey) {
-  return PublicKey.findProgramAddressSync(
+export async function getTokenRecordPDA(tokenMint: PublicKey, associatedToken: PublicKey) {
+  return (await PublicKey.findProgramAddress(
     [
       Buffer.from("metadata"), 
       TokenMetadata.PROGRAM_ID.toBuffer(), 
@@ -18,7 +18,7 @@ export function getTokenRecordPDA(tokenMint: PublicKey, associatedToken: PublicK
       associatedToken.toBuffer()
     ],
     TokenMetadata.PROGRAM_ID,
-  )[0]
+  ))[0]
 }
 
 export async function createRuleSetAccount(name: string, owner: Keypair, rules: any, provider: Provider) {
@@ -57,6 +57,7 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     creator, 
     totalSupply
   );
+  console.log('created mint')
 
   // Create an ATA for the mint owned by admin.
   const token = await createAssociatedTokenAccount(
@@ -65,6 +66,7 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     tokenMint, 
     creator
   );
+  console.log('created token')
 
   await mintTo(
     provider.connection, 
@@ -74,9 +76,11 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     payer, 
     1
   );
+  console.log('minted to ata')
 
-  const metadataPDA = getMetadataPDA(tokenMint)
-  const masterEditionPDA = getMasterEditionPDA(tokenMint)
+
+  const metadataPDA = await getMetadataPDA(tokenMint)
+  const masterEditionPDA = await getMasterEditionPDA(tokenMint)
 
   const createMetadataIx = createCreateMetadataAccountV3Instruction(
     {
@@ -150,9 +154,9 @@ export async function createProgrammableNFT(provider: Provider, payer: Keypair, 
   );
 
   const rulesetPDA = hasRuleset ? (await TokenAuth.findRuleSetPDA(ruleSetOwner, ruleSetName))[0] : undefined
-  const metadataPDA = getMetadataPDA(tokenMint)
-  const masterEditionPDA = getMasterEditionPDA(tokenMint)
-  const tokenRecordPDA = getTokenRecordPDA(tokenMint, token)
+  const metadataPDA = await getMetadataPDA(tokenMint)
+  const masterEditionPDA = await getMasterEditionPDA(tokenMint)
+  const tokenRecordPDA = await getTokenRecordPDA(tokenMint, token)
 
   // Create the Create instruction.
   const createCreateIx = createCreateInstruction(
@@ -221,36 +225,4 @@ export async function createProgrammableNFT(provider: Provider, payer: Keypair, 
   const txHash = (await provider.sendAll([{ tx: signedTxn, signers: [payer] }]))[0];
   console.log(txHash)
   return tokenMint
-}
-
-export function parseRuleSetAccountData(ruleSetAccountData: Buffer) {
-  console.log("Data length:", ruleSetAccountData.length)
-
-  // Parse header
-  const ruleSetHeaderData = ruleSetAccountData.slice(0, 9)
-  console.log("ruleSetHeaderData", ruleSetHeaderData)
-  const ruleSetAccountKey = ruleSetHeaderData.at(0)
-  console.log("ruleSetAccountKey", ruleSetAccountKey)
-  const ruleSetAccountRevMapVersionLocation = new BN(ruleSetHeaderData.slice(1).reverse(), 16)
-  const ruleSetAccountRevMapVersion = ruleSetAccountData.at(ruleSetAccountRevMapVersionLocation.toNumber())
-  console.log("ruleSetAccountRevMapVersion", ruleSetAccountRevMapVersion.toString())
-
-  // parse rev map
-  const ruleSetAccountRevMapData = ruleSetAccountData.slice(ruleSetAccountRevMapVersionLocation.toNumber() + 1)
-  console.log("ruleSetAccountRevMapData", ruleSetAccountRevMapData)
-  const ruleSetAccountRevMapLength = new BN(ruleSetAccountRevMapData.slice(0, 3).reverse(), 16)
-  const ruleSetAccountRevVersionOffset = ((ruleSetAccountRevMapLength.toNumber() - 1) * 8) + 4
-  const activeRuleSetLocation = new BN(ruleSetAccountRevMapData.slice(
-    ruleSetAccountRevVersionOffset, 
-    ruleSetAccountRevVersionOffset + 8
-  ).reverse(), 16)
-  console.log("activeRuleSetLocation", activeRuleSetLocation.toString())
-
-  // parse active rule set
-  const activeRuleSetVersionAndData = ruleSetAccountData.slice(activeRuleSetLocation, ruleSetAccountRevMapVersionLocation)
-  console.log("activeRuleSetVersionAndData", activeRuleSetVersionAndData)
-  const activeRuleSetVersion = activeRuleSetVersionAndData.at(0)
-  console.log("activeRuleSetVersion", activeRuleSetVersion)
-  const activeRuleSetData = decode(activeRuleSetVersionAndData.slice(1))
-  console.log("activeRuleSetData", activeRuleSetData)
 }

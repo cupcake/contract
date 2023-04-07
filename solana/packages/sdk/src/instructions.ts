@@ -3,9 +3,8 @@ import * as TokenAuth from "@metaplex-foundation/mpl-token-auth-rules"
 import { Program, Provider } from "@project-serum/anchor";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, createInitializeMintInstruction, createMintToInstruction, getAssociatedTokenAddressSync, MintLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair, PublicKey, SystemProgram, SYSVAR_CLOCK_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY, SYSVAR_SLOT_HASHES_PUBKEY } from "@solana/web3.js";
-import { TOKEN_METADATA_PROGRAM_ID } from "./cupcake_program";
+import { TOKEN_METADATA_PROGRAM_ID, AddOrRefillTagAccounts, AddOrRefillTagParams, ClaimTagAccounts, ClaimTagAdditionalArgs, ClaimTagParams, InitializeAccounts } from "./cupcake_program";
 import { getConfig, getTag, getTokenRecordPDA, getUserHotPotatoToken, getUserInfo } from "./pda";
-import { AddOrRefillTagAccounts, AddOrRefillTagParams, ClaimTagAccounts, ClaimTagAdditionalArgs, ClaimTagParams, InitializeAccounts } from "./types";
 import { CANDY_MACHINE_ADDRESS, getCandyMachineCreator, getCollectionPDA, getEditionMarkPda, getMasterEdition, getMetadata } from "./utils/mpl";
 
 export class CupcakeInstruction {

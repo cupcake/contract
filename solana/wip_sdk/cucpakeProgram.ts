@@ -11,19 +11,19 @@ import { UserInfo } from "./state/userInfo";
 
 export const PDA_PREFIX = 'cupcake';
 
-export function getMetadataPDA(tokenMint: PublicKey) {
-  return PublicKey.findProgramAddressSync(
+export async function getMetadataPDA(tokenMint: PublicKey) {
+  return (await PublicKey.findProgramAddress(
     [
       Buffer.from("metadata"), 
       TokenMetadata.PROGRAM_ID.toBuffer(), 
       tokenMint.toBuffer()
     ],
     TokenMetadata.PROGRAM_ID
-  )[0]
+  ))[0]
 }
 
-export function getMasterEditionPDA(tokenMint: PublicKey) {
-  return PublicKey.findProgramAddressSync(
+export async function getMasterEditionPDA(tokenMint: PublicKey) {
+  return (await PublicKey.findProgramAddress(
     [
       Buffer.from("metadata"), 
       TokenMetadata.PROGRAM_ID.toBuffer(), 
@@ -31,7 +31,7 @@ export function getMasterEditionPDA(tokenMint: PublicKey) {
       Buffer.from("edition")
     ],
     TokenMetadata.PROGRAM_ID
-  )[0]
+  ))[0]
 }
 
 export class CupcakeProgram {
@@ -59,7 +59,7 @@ export class CupcakeProgram {
 
     async bakeSprinkle(sprinkleType: string, uid: string, tokenMint: PublicKey, numClaims: number, perUser: number, sprinkleAuthority: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
-      const sprinklePDA = Sprinkle.PDA(
+      const sprinklePDA = await Sprinkle.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         this.program.programId
@@ -70,13 +70,9 @@ export class CupcakeProgram {
         this.bakeryAuthorityKeypair.publicKey
       );
 
-      const metadataPDA = getMetadataPDA(tokenMint);
-      const masterEditionPDA = getMasterEditionPDA(tokenMint);
-      const tokenRecordPDA = getTokenRecordPDA(tokenMint, bakeryTokenATA);
-      const rulesetPDA = (await TokenAuth.findRuleSetPDA(
-        this.bakeryAuthorityKeypair.publicKey, 
-        "cupcake-ruleset"
-      ))[0];
+      const metadataPDA = await getMetadataPDA(tokenMint);
+      const masterEditionPDA = await getMasterEditionPDA(tokenMint);
+      const tokenRecordPDA = await getTokenRecordPDA(tokenMint, bakeryTokenATA);
 
       const metadata = await TokenMetadata.Metadata.fromAccountAddress(
         this.program.provider.connection, 
@@ -84,6 +80,7 @@ export class CupcakeProgram {
       );
       const isProgrammable = !!metadata.programmableConfig
       const hasRuleset = !!metadata.programmableConfig?.ruleSet
+      console.log(isProgrammable, hasRuleset, "baking")
 
       return this.program.methods
         .addOrRefillTag({
@@ -108,7 +105,11 @@ export class CupcakeProgram {
           { pubkey: metadataPDA, isWritable: true, isSigner: false },
           { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
           { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-          { pubkey: rulesetPDA, isWritable: false, isSigner: false },
+          { 
+            pubkey: hasRuleset ? metadata.programmableConfig!.ruleSet : TokenMetadata.PROGRAM_ID, 
+            isWritable: false, 
+            isSigner: false 
+          },
           { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
           { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
           { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
@@ -119,12 +120,12 @@ export class CupcakeProgram {
 
     async claimSprinkle(uid: string, user: PublicKey, sprinkleAuthorityKeypair: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
-      const sprinklePDA = Sprinkle.PDA(
+      const sprinklePDA = await Sprinkle.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         this.program.programId
       );
-      const sprinkleState = await this.program.account.tag.fetch(sprinklePDA);
+      const sprinkleState = await this.program.account.tag.fetch(await sprinklePDA);
       const token = getAssociatedTokenAddressSync(
         sprinkleState.tokenMint, 
         this.bakeryAuthorityKeypair.publicKey
@@ -133,20 +134,20 @@ export class CupcakeProgram {
         sprinkleState.tokenMint, 
         user
       );
-      const userInfoPDA = UserInfo.PDA(
+      const userInfoPDA = await UserInfo.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
         user,
         this.program.programId
       );
-      const metadataPDA = getMetadataPDA(sprinkleState.tokenMint);
-      const masterEditionPDA = getMasterEditionPDA(sprinkleState.tokenMint);
-      const tokenRecordPDA = getTokenRecordPDA(sprinkleState.tokenMint, token);
-      const destinationTokenRecordPDA = getTokenRecordPDA(sprinkleState.tokenMint, userATA);
+      const metadataPDA = await getMetadataPDA(sprinkleState.tokenMint);
+      const masterEditionPDA = await getMasterEditionPDA(sprinkleState.tokenMint);
+      const tokenRecordPDA = await getTokenRecordPDA(sprinkleState.tokenMint, token);
+      const destinationTokenRecordPDA = await getTokenRecordPDA(sprinkleState.tokenMint, userATA);
 
       const metadata = await TokenMetadata.Metadata.fromAccountAddress(
         this.program.provider.connection, 
-        metadataPDA
+        await metadataPDA
       );
       const isProgrammable = !!metadata.programmableConfig
       const hasRuleset = !!metadata.programmableConfig?.ruleSet

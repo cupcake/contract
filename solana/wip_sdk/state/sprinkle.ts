@@ -17,14 +17,14 @@ export class Sprinkle {
 
   }
 
-  static PDA(bakeryAuthority: PublicKey, sprinkleUID: BN, programId = CUPCAKE_PROGRAM_ID) {
-    return PublicKey.findProgramAddressSync(
+  static async PDA(bakeryAuthority: PublicKey, sprinkleUID: BN, programId = CUPCAKE_PROGRAM_ID) {
+    return (await PublicKey.findProgramAddress(
       [
         Buffer.from(PDA_PREFIX), 
         bakeryAuthority.toBuffer(), 
         sprinkleUID.toBuffer('le', 8)
       ],
       programId
-    )[0]
+    ))[0]
   }
 }
