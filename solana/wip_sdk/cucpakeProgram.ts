@@ -54,12 +54,12 @@ export class CupcakeProgram {
           break;
 
         default:
-          const tokenApprovalRemainingAccounts = await BakeTokenApprovalSprinkleData.buildRemainingAccounts(
+          const bakeTokenApprovalSprinkleData = await BakeTokenApprovalSprinkleData.construct(
             this.program.provider.connection, 
             this.bakeryAuthorityKeypair.publicKey,
             tokenMint, 
           );
-          remainingAccounts.push(...tokenApprovalRemainingAccounts);
+          remainingAccounts.push(...bakeTokenApprovalSprinkleData.remainingAccounts);
           break;
       }
 
@@ -133,7 +133,7 @@ export class CupcakeProgram {
 
       // CandyMachine
       else if (sprinkleState.tagType.candyMachineDrop) {
-        
+
       }
       
       // SingleUse Refillable Fungible Programmble

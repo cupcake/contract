@@ -20,11 +20,18 @@ export class ClaimTokenTransferSprinkleData {
     const destinationTokenRecordPDA = await getTokenRecordPDA(sprinkleState.tokenMint, userATA);
 
     //
-    const metadata = await TokenMetadata.Metadata.fromAccountAddress(
-      connection, 
-      metadataPDA
-    );
-    const ruleSetPDA = metadata.programmableConfig?.ruleSet ?? TokenMetadata.PROGRAM_ID;
+    let ruleSetPDA = TokenMetadata.PROGRAM_ID;
+    let isProgrammable = false;
+    try {
+      const metadata = await TokenMetadata.Metadata.fromAccountAddress(
+        connection, 
+        metadataPDA
+      );
+      isProgrammable = !!metadata.programmableConfig;
+      ruleSetPDA = metadata.programmableConfig?.ruleSet ?? TokenMetadata.PROGRAM_ID;
+    } catch {
+      console.warn("Baking token with no metadata")
+    }
 
     const preInstructions = [];
     if (true) {
@@ -41,18 +48,23 @@ export class ClaimTokenTransferSprinkleData {
     const remainingAccounts = [
       { pubkey: bakeryTokenATA, isWritable: true, isSigner: false },
       { pubkey: userATA, isWritable: true, isSigner: false },
-      { pubkey: bakeryAuthority, isWritable: false, isSigner: false },
-      { pubkey: sprinkleState.tokenMint, isWritable: false, isSigner: false },
-      { pubkey: metadataPDA, isWritable: true, isSigner: false },
-      { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
-      { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-      { pubkey: destinationTokenRecordPDA, isWritable: true, isSigner: false },
-      { pubkey: ruleSetPDA, isWritable: false, isSigner: false },
-      { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
-      { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
-      { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
     ];
+    if (isProgrammable) {
+      const programmableRemainingAccounts = [
+        { pubkey: bakeryAuthority, isWritable: false, isSigner: false },
+        { pubkey: sprinkleState.tokenMint, isWritable: false, isSigner: false },
+        { pubkey: metadataPDA, isWritable: true, isSigner: false },
+        { pubkey: masterEditionPDA, isWritable: true, isSigner: false },
+        { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
+        { pubkey: destinationTokenRecordPDA, isWritable: true, isSigner: false },
+        { pubkey: ruleSetPDA, isWritable: false, isSigner: false },
+        { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isWritable: false, isSigner: false },
+        { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
+        { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
+      ];
+      remainingAccounts.push(...programmableRemainingAccounts);
+    }
 
     return { preInstructions, remainingAccounts } as ClaimTokenTransferSprinkleData
   }

@@ -84,14 +84,14 @@ export async function createRuleSetAccount(name: string, owner: Keypair, rules: 
   return (await provider.sendAll([{ tx: signedTxn, signers: [owner] }]))[0];
 }
 
-export async function mintNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number) {
+export async function mintToken(provider: Provider, payer: Keypair, receiver: PublicKey, decimals: number, initialSupply: number) {
   // Initialize the token mint.
   const tokenMint = await createMint(
     provider.connection, 
     payer, 
-    creator, 
-    creator, 
-    0
+    receiver, 
+    receiver, 
+    decimals
   );
 
   // Create an ATA for the mint owned by admin.
@@ -99,7 +99,7 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     provider.connection, 
     payer, 
     tokenMint, 
-    creator
+    receiver
   );
 
   await mintTo(
@@ -108,9 +108,15 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     tokenMint, 
     token, 
     payer, 
-    1
+    initialSupply
   );
 
+  return tokenMint
+}
+
+export async function mintNFT(provider: Provider, payer: Keypair, creator: PublicKey, totalSupply: number) {
+  // Initialize the token mint.
+  const tokenMint = await mintToken(provider, payer, creator, 0, 1)
 
   const metadataPDA = await getMetadataPDA(tokenMint)
   const masterEditionPDA = await getMasterEditionPDA(tokenMint)

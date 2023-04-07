@@ -54,9 +54,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     let mut is_programmable = false;
     if ctx.remaining_accounts.len() > 2 {
-        let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[2])?;
+        let token_metadata_info = &ctx.remaining_accounts[2];
+        let token_metadata = Metadata::from_account_info(token_metadata_info)?;
         is_programmable = token_metadata.programmable_config != None;
     }
+
 
     match is_programmable {
         false => {
