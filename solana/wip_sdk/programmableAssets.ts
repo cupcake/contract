@@ -55,7 +55,7 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     payer, 
     creator, 
     creator, 
-    totalSupply
+    0
   );
   console.log('created mint')
 
@@ -118,7 +118,7 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     },
     {
       createMasterEditionArgs: {
-        maxSupply: 0
+        maxSupply: totalSupply
       }
     }
   );
