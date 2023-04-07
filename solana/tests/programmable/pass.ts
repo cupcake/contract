@@ -84,7 +84,7 @@ describe('Programmable with `Pass` RuleSet', () => {
 
     const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
       sprinkleUID, 
-      user.publicKey,
+      user,
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);

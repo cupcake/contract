@@ -22,6 +22,7 @@ export class BakeTokenApprovalSprinkleData {
       connection, 
       metadataPDA
     );
+    const ruleSetPDA = metadata.programmableConfig?.ruleSet ?? TokenMetadata.PROGRAM_ID
 
     //
     return [
@@ -30,11 +31,7 @@ export class BakeTokenApprovalSprinkleData {
       { pubkey: metadataPDA, isWritable: true, isSigner: false },
       { pubkey: masterEditionPDA, isWritable: false, isSigner: false },
       { pubkey: tokenRecordPDA, isWritable: true, isSigner: false },
-      { 
-        pubkey: metadata.programmableConfig?.ruleSet ?? TokenMetadata.PROGRAM_ID, 
-        isWritable: false, 
-        isSigner: false 
-      },
+      { pubkey: ruleSetPDA, isWritable: false, isSigner: false },
       { pubkey: TokenAuth.PROGRAM_ID, isWritable: false, isSigner: false },
       { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
       { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },

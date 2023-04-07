@@ -78,7 +78,7 @@ describe('Programmable with `ProgramOwned` RuleSet', () => {
 
     const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
       sprinkleUID, 
-      user.publicKey,
+      user,
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);
@@ -126,7 +126,7 @@ it('Tests for pNFTs with ProgramOwnedList rules', async () => {
 
   const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
     sprinkleUID, 
-    user.publicKey,
+    user,
     sprinkleAuthority
   );
   console.log('claimSprinkleTxHash', claimSprinkleTxHash);

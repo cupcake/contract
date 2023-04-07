@@ -93,7 +93,6 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     creator, 
     0
   );
-  console.log('created mint')
 
   // Create an ATA for the mint owned by admin.
   const token = await createAssociatedTokenAccount(
@@ -102,7 +101,6 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     tokenMint, 
     creator
   );
-  console.log('created token')
 
   await mintTo(
     provider.connection, 
@@ -112,7 +110,6 @@ export async function mintNFT(provider: Provider, payer: Keypair, creator: Publi
     payer, 
     1
   );
-  console.log('minted to ata')
 
 
   const metadataPDA = await getMetadataPDA(tokenMint)

@@ -3,7 +3,7 @@ import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
 import { CupcakeProgram } from "../wip_sdk/cucpakeProgram";
-import { createProgrammableNFT, createRuleSetAccount, mintNFT } from "../wip_sdk/programmableAssets";
+import { mintNFT } from "../wip_sdk/programmableAssets";
 import { Bakery } from '../wip_sdk/state/bakery';
 
 describe('`EditionPrinter` Sprinkle', () => {
@@ -16,8 +16,6 @@ describe('`EditionPrinter` Sprinkle', () => {
 
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
   const cupcakeProgramClient = new CupcakeProgram(cupcakeProgram, admin)
-
-  const bakeryPDA = Bakery.PDA(admin.publicKey, cupcakeProgram.programId);
 
   const sprinkleUID = "66554433221155"
   const sprinkleAuthority = anchor.web3.Keypair.generate();
@@ -67,7 +65,7 @@ describe('`EditionPrinter` Sprinkle', () => {
     try {
     const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
       sprinkleUID, 
-      user.publicKey,
+      user,
       sprinkleAuthority
     );
     console.log('claimSprinkleTxHash', claimSprinkleTxHash);

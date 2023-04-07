@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*, solana_program::program::invoke_signed};
-use anchor_spl::token::{SetAuthority, set_authority, Mint, TokenAccount};
+use anchor_spl::token::{SetAuthority, set_authority, Mint, TokenAccount, Approve, approve};
 use mpl_token_metadata::instruction::freeze_delegated_account;
 
 use crate::{instructions::AddOrRefillTag, errors::ErrorCode, utils::assert_keys_equal, state::{PDA_PREFIX, TagType, Tag}};
@@ -13,6 +13,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let config = &ctx.accounts.config;
     let tag = &mut ctx.accounts.tag;
     let tag_authority = &mut ctx.accounts.tag_authority;
+    let token_program = &mut ctx.accounts.token_program;
     let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
 
     let token_mint = &ctx.remaining_accounts[0];
@@ -36,6 +37,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
             || token_account.amount == 1,
         ErrorCode::CanOnlyMutateHotPotatoWhenAtHome
     );
+
+    //
+    let cpi_accounts = Approve {
+        to: token.clone(),
+        delegate: ctx.accounts.config.to_account_info(),
+        authority: ctx.accounts.authority.to_account_info(),
+    };
+    let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
+    approve(context, 1)?;
 
     // If the token isn't already frozen, freeze it now.
     if token_account.state != spl_token::state::AccountState::Frozen {

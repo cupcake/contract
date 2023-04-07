@@ -15,33 +15,32 @@ export class ClaimEditionPrinterSprinkleData {
     const metadataPDA = await getMetadataPDA(sprinkleState.tokenMint);
     const masterEditionPDA = await getMasterEditionPDA(sprinkleState.tokenMint);
 
+    //
     const newTokenMintKeypair = Keypair.generate();
     const newTokenMint = newTokenMintKeypair.publicKey;
     const newUserATA = getAssociatedTokenAddressSync(newTokenMint, claimer);
     const newMetadataPDA = await getMetadataPDA(newTokenMint);
     const newMasterEditionPDA = await getMasterEditionPDA(newTokenMint);
 
+    //
     const masterEditionAccountInfo = await connection.getAccountInfo(masterEditionPDA);
     const masterEdition = TokenMetadata.MasterEditionV2.fromAccountInfo(masterEditionAccountInfo)[0];
     const newEditionNumber = masterEdition.supply.toNumber() + 1;
     const editionMarkPDA = await getEditionMarkPDA(sprinkleState.tokenMint, newEditionNumber);
 
-    const preInstructions = [];
-    const extraSigners = [];
-    const createMintAccountIx = SystemProgram.createAccount({
-      fromPubkey: bakeryAuthority,
-      newAccountPubkey: newTokenMint,
-      space: MintLayout.span,
-      lamports: await connection.getMinimumBalanceForRentExemption(MintLayout.span),
-      programId: TOKEN_PROGRAM_ID,
-    });
-    const initializeMintIx = createInitializeMintInstruction(newTokenMint, 0, bakeryAuthority, bakeryAuthority);
-    const createATAIx = createAssociatedTokenAccountInstruction(bakeryAuthority, newUserATA, claimer, newTokenMint);
-    const mintToIx = createMintToInstruction(newTokenMint, newUserATA, bakeryAuthority, 1)
-    preInstructions.push(createMintAccountIx, initializeMintIx, createATAIx, mintToIx);
-    extraSigners.push(newTokenMintKeypair);
-
     //
+    const preInstructions = [
+      SystemProgram.createAccount({
+        fromPubkey: bakeryAuthority,
+        newAccountPubkey: newTokenMint,
+        space: MintLayout.span,
+        lamports: await connection.getMinimumBalanceForRentExemption(MintLayout.span),
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMintInstruction(newTokenMint, 0, bakeryAuthority, bakeryAuthority),
+      createAssociatedTokenAccountInstruction(bakeryAuthority, newUserATA, claimer, newTokenMint),
+      createMintToInstruction(newTokenMint, newUserATA, bakeryAuthority, 1),
+    ];
     const remainingAccounts = [
       { pubkey: sprinkleState.tokenMint, isWritable: false, isSigner: false },
       { pubkey: bakeryTokenATA, isWritable: true, isSigner: false },
@@ -55,6 +54,7 @@ export class ClaimEditionPrinterSprinkleData {
       { pubkey: bakeryAuthority, isWritable: false, isSigner: false },
       { pubkey: TokenMetadata.PROGRAM_ID, isWritable: false, isSigner: false },
     ];
+    const extraSigners = [newTokenMintKeypair];
 
     return { preInstructions, remainingAccounts, extraSigners } as ClaimEditionPrinterSprinkleData
   }

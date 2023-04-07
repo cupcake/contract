@@ -1,5 +1,5 @@
 import { Program, BN } from "@project-serum/anchor";
-import { Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { Cupcake } from '../target/types/cupcake';
 import { Bakery } from "./state/bakery";
 import { Sprinkle, SprinkleX } from "./state/sprinkle";
@@ -7,6 +7,8 @@ import { UserInfo } from "./state/userInfo";
 import { BakeTokenApprovalSprinkleData } from "./instructions/bakeSprinkle/tokenApproval";
 import { ClaimTokenTransferSprinkleData } from "./instructions/claimSprinkle/tokenTransfer";
 import { ClaimEditionPrinterSprinkleData } from "./instructions/claimSprinkle/editionPrinter";
+import { BakeHotPotatoSprinkleData } from "./instructions/bakeSprinkle/hotPotato";
+import { ClaimHotPotatoSprinkleData } from "./instructions/claimSprinkle/hotPotato";
 
 export const PDA_PREFIX = 'cupcake';
 
@@ -42,7 +44,15 @@ export class CupcakeProgram {
       );
 
       const remainingAccounts = [];
-      switch (sprinkleType) {        
+      switch (sprinkleType) {       
+        case "hotPotato":
+          const bakeHotPotatoSprinkleData = await BakeHotPotatoSprinkleData.construct(
+            this.bakeryAuthorityKeypair.publicKey,
+            tokenMint, 
+          );
+          remainingAccounts.push(...bakeHotPotatoSprinkleData.remainingAccounts);
+          break;
+
         default:
           const tokenApprovalRemainingAccounts = await BakeTokenApprovalSprinkleData.buildRemainingAccounts(
             this.program.provider.connection, 
@@ -75,7 +85,7 @@ export class CupcakeProgram {
         .rpc()
     }
 
-    async claimSprinkle(uid: string, user: PublicKey, sprinkleAuthorityKeypair: Keypair) {
+    async claimSprinkle(uid: string, claimerKeypair: Keypair, sprinkleAuthorityKeypair: Keypair) {
       const sprinkleUID = new BN(`CC${uid}`, "hex");
       const sprinklePDA = await Sprinkle.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
@@ -86,34 +96,52 @@ export class CupcakeProgram {
       const userInfoPDA = await UserInfo.PDA(
         this.bakeryAuthorityKeypair.publicKey, 
         sprinkleUID, 
-        user,
+        claimerKeypair.publicKey,
         this.program.programId
       );
 
+      let instructionArgs = 0;
       const remainingAccounts = [];
       const preInstructions = [];
       const extraSigners = [];
 
       // EditionPrinter
       if (sprinkleState.tagType.limitedOrOpenEdition) {    
-        console.log("Lol")
         const editionPrinterClaimData = await ClaimEditionPrinterSprinkleData.construct(
           this.program.provider.connection, 
           this.bakeryAuthorityKeypair.publicKey,
-          user, 
+          claimerKeypair.publicKey, 
           sprinkleState
         );
         remainingAccounts.push(...editionPrinterClaimData.remainingAccounts);
         preInstructions.push(...editionPrinterClaimData.preInstructions);
         extraSigners.push(...editionPrinterClaimData.extraSigners);
       } 
+
+      // HotPotato
+      else if (sprinkleState.tagType.hotPotato) {
+        const hotPotatoClaimData = await ClaimHotPotatoSprinkleData.construct(
+          this.program.provider.connection, 
+          this.bakeryAuthorityKeypair.publicKey,
+          claimerKeypair, 
+          sprinkleState
+        );
+        instructionArgs = hotPotatoClaimData.instructionArgs;
+        remainingAccounts.push(...hotPotatoClaimData.remainingAccounts);
+        extraSigners.push(...hotPotatoClaimData.extraSigners);
+      }
+
+      // CandyMachine
+      else if (sprinkleState.tagType.candyMachineDrop) {
+        
+      }
       
-      // All other types
+      // SingleUse Refillable Fungible Programmble
       else {
         const tokenTransferClaimData = await ClaimTokenTransferSprinkleData.construct(
           this.program.provider.connection, 
           this.bakeryAuthorityKeypair.publicKey,
-          user, 
+          claimerKeypair.publicKey, 
           sprinkleState
         );
         remainingAccounts.push(...tokenTransferClaimData.remainingAccounts);
@@ -121,9 +149,9 @@ export class CupcakeProgram {
       }
 
       return this.program.methods
-        .claimTag(0)
+        .claimTag(instructionArgs)
         .accounts({
-          user,
+          user: claimerKeypair.publicKey,
           authority: this.bakeryAuthorityKeypair.publicKey,
           payer: this.bakeryAuthorityKeypair.publicKey,
           config: this.bakeryPDA,
