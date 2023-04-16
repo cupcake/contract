@@ -13,13 +13,15 @@ use mpl_token_metadata::instruction::{
 use mpl_token_metadata::processor::AuthorizationData;
 use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
-use crate::state::PDA_PREFIX;
+use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
+    assert_derivation_with_bump,
+    assert_derivation
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -99,9 +101,14 @@ pub struct ClaimTag<'info> {
         // token (w) - current location of token (as set in tag field)
         // user_token_account (w) - token account with seed [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref(), tag.token_mint.to_le_bytes()]
         // will be initialized if not setup.
+        // listing (w) - the listing for the token with seed [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX]
+        // listing ata (w) [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX, TOKEN] NOTE can be an empty account if using sol
+        // seller ata of token mint OR the seller themselves if SOL (w)  
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
         // token_metadata_program - token mint on the tag
+        // metadata of NFT
+        // royalty ata (w) OR royalty sol accounts (w) from NFT (derive ATA from royalta accounts) [up to 5]
     //
     // LimitedOrOpenEdition:
         // token_mint - token mint on the tag
@@ -488,9 +495,23 @@ pub fn handler<'a, 'b, 'c, 'info>(
         TagType::HotPotato => {
             let token = &ctx.remaining_accounts[0];
             let user_token_account = &ctx.remaining_accounts[1];
-            let edition = &ctx.remaining_accounts[2];
-            let token_mint = &ctx.remaining_accounts[3];
-            let token_metadata_program = &ctx.remaining_accounts[4];
+            let listing_data = &ctx.remaining_accounts[2];
+            let listing_token_account = &ctx.remaining_accounts[3];
+            let seller_ata = &ctx.remaining_accounts[4];
+            let edition = &ctx.remaining_accounts[5];
+            let token_mint = &ctx.remaining_accounts[6];
+            let token_metadata_program = &ctx.remaining_accounts[7];
+            let token_metadata = &ctx.remaining_accounts[8];
+
+            assert_derivation(
+                &mpl_token_metadata::id(),
+                &token_metadata.to_account_info(),
+                &[
+                    mpl_token_metadata::state::PREFIX.as_bytes(),
+                    mpl_token_metadata::id().as_ref(),
+                    tag.token_mint.as_ref(),
+                ],
+            )?;
 
             // Ensure the provided Token Metadata Program, and token accounts are legitimate.
             assert_keys_equal(
@@ -630,6 +651,91 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 ],
                 &[&config_seeds[..]],
             )?;
+
+            // Listing checks
+            if !listing_data.data_is_empty() {
+                // Ensure the listing key matches using a bump which is faster.
+
+                let listing: Account<Listing> = Account::try_from(&listing_data)?;
+
+                let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
+
+                assert_derivation_with_bump(
+                    ctx.program_id,
+                    listing_token_account,
+                    listing_seeds
+                    )?;
+
+                // Okay, you have right listing - ensure you aren't trying to potato swap during an incorrect state
+
+                if listing.state != ListingState::Shipped && 
+                    listing.state != ListingState::Scanned && 
+                    listing.state != ListingState::Initialized &&
+                    listing.state != ListingState::CupcakeCanceled &&
+                    listing.state != ListingState::UserCanceled
+                     {
+                    return Err(ErrorCode::InvalidListingState.into());
+                }
+
+                if listing.state == ListingState::Shipped {
+                    if let Some(mint) = listing.price_mint {
+                        // Make sure listing ata is correct
+                        assert_derivation_with_bump(
+                            ctx.program_id,
+                            listing_token_account,
+                            &[
+                                &PDA_PREFIX[..], 
+                                &config.authority.as_ref()[..], 
+                                &tag.uid.to_le_bytes()[..], 
+                                &LISTING[..], &TOKEN[..], 
+                                &[listing.token_bump]],
+                                )?;
+                        assert_is_ata(
+                            &seller_ata,
+                            &listing.seller,
+                            &mint,
+                            None,
+                        )?; 
+
+                        // Transfer the tokens.
+                        let cpi_accounts = token::Transfer {
+                            from: listing_token_account.clone(),
+                            to: seller_ata.clone(),
+                            authority: listing.to_account_info(),
+                        };
+                        let context =
+                            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+                        token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.price.unwrap())?;
+                    } else {
+
+                        assert_keys_equal(listing.seller, seller_ata.key())?;
+
+                        let ix = anchor_lang::solana_program::system_instruction::transfer(
+                            &listing.key(),
+                            &listing.seller,
+                            listing.price.unwrap(),
+                        );
+                        anchor_lang::solana_program::program::invoke(
+                            &ix,
+                            &[
+                                listing_data.to_account_info(),
+                                // Not actually an ata in this case, is just the seller's account
+                                seller_ata.to_account_info(),
+                            ],
+                        )?;
+                    }
+
+                    let mut data = listing_data.data.borrow_mut();
+                    data[8+1+32+32]=ListingState::Scanned as u8;
+                }
+
+
+            } else {
+                // Ensure at least you are sending in correct address and not trying to dodge our state checks
+                let seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..]];
+                let (key, _) = Pubkey::find_program_address(seeds, &ctx.program_id);
+                assert_keys_equal(listing_data.key(), key)?;
+            }
         }
     };
 
