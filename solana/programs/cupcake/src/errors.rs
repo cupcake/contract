@@ -46,7 +46,7 @@ pub enum ErrorCode {
 
     #[msg("This tag requires that someone other than config authority pay for the mint")]
     AuthorityShouldNotBePayer,
-    
+
     #[msg("Hot potato is immutable unless the token is in an ATA on the config authority wallet.")]
     CanOnlyMutateHotPotatoWhenAtHome,
 
@@ -54,5 +54,26 @@ pub enum ErrorCode {
     ProgrammableRuleNotSupported,
 
     #[msg("Hot Potatos can not be pNFTs")]
-    HotPotatoCanNotBeProgrammable
+    HotPotatoCanNotBeProgrammable,
+
+    #[msg("Invalid seeds provided")]
+    InvalidSeeds,
+
+    #[msg("Cannot claim during this state")]
+    InvalidListingState,
+
+    #[msg("Cannot change price setting during this state")]
+    CannotChangePriceSettingsInThisState,
+
+    #[msg("Listing ATA must be empty to move")]
+    ListingAtaMustBeEmpty,
+
+    #[msg("If you are going to use a price_mint, you need to send up the listing token account to modify this listing")]
+    MustSendUpListingTokenAccount,
+
+    #[msg("If you are going to use a price_mint, you need to send up the price mint to modify this listing")]
+    MustSendUpPriceMint,
+
+    #[msg("Numerical Overflow")]
+    NumericalOverflow,
 }
