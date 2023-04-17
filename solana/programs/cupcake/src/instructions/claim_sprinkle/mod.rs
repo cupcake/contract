@@ -21,7 +21,8 @@ use crate::utils::{
     sighash, grab_update_authority, 
     get_master_edition_supply,
     assert_derivation_with_bump,
-    assert_derivation
+    assert_derivation,
+    pay_creator_fees
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -106,9 +107,14 @@ pub struct ClaimTag<'info> {
         // seller ata of token mint OR the seller themselves if SOL (w)  
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
+        // price_mint - price mint on the listing - can be system if unset
         // token_metadata_program - token mint on the tag
+        // ata program - associated token program
         // metadata of NFT
-        // royalty ata (w) OR royalty sol accounts (w) from NFT (derive ATA from royalta accounts) [up to 5]
+        // OUR_ADDRESS (w) sol account for collecting fees
+        // OUR_ADDRESS (w) ata account for collecting price mint fees
+        // royalty sol account (w) followed by royalty ata (w) pair from NFT (derive ATA from royalty accounts) [up to 5]
+        // Note you only need to pass the ata account after the sol account IF using a price mint, otherwise its only the sol accounts
     //
     // LimitedOrOpenEdition:
         // token_mint - token mint on the tag
@@ -500,8 +506,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let seller_ata = &ctx.remaining_accounts[4];
             let edition = &ctx.remaining_accounts[5];
             let token_mint = &ctx.remaining_accounts[6];
-            let token_metadata_program = &ctx.remaining_accounts[7];
-            let token_metadata = &ctx.remaining_accounts[8];
+            let price_mint = &ctx.remaining_accounts[7];
+            let token_metadata_program = &ctx.remaining_accounts[8];
+            let ata_program = &ctx.remaining_accounts[9];
+            let token_metadata = &ctx.remaining_accounts[10];
 
             assert_derivation(
                 &mpl_token_metadata::id(),
@@ -520,6 +528,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             )?;
             assert_keys_equal(token.key(), tag.current_token_location)?;
             assert_keys_equal(token_mint.key(), tag.token_mint)?;
+            assert_keys_equal(ata_program.key(), spl_associated_token_account::id())?;
 
             // Initialize a new account, to be used as an ATA.
             let user_key = user.key();
@@ -679,6 +688,24 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
                 if listing.state == ListingState::Shipped {
                     if let Some(mint) = listing.price_mint {
+                        assert_keys_equal(price_mint.key(), mint)?;
+
+                        let listing_price_sans_royalties = pay_creator_fees(
+                            &mut ctx.remaining_accounts[11..].into_iter(),
+                            token_metadata,
+                            listing_token_account,
+                            &listing.to_account_info(),
+                            payer,
+                            price_mint,
+                            ata_program,
+                            &ctx.accounts.token_program,
+                            &ctx.accounts.system_program,
+                            &ctx.accounts.rent.to_account_info(),
+                            listing_seeds,
+                            &[],
+                            listing.agreed_price.unwrap(),
+                            false
+                        )?;
                         // Make sure listing ata is correct
                         assert_derivation_with_bump(
                             ctx.program_id,
@@ -705,15 +732,32 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         };
                         let context =
                             CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-                        token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.price.unwrap())?;
+                        token::transfer(context.with_signer(&[&listing_seeds[..]]), listing_price_sans_royalties)?;
                     } else {
+
+                        let listing_price_sans_royalties = pay_creator_fees(
+                            &mut ctx.remaining_accounts[11..].into_iter(),
+                            token_metadata,
+                            &listing.to_account_info(),
+                            &listing.to_account_info(),
+                            payer,
+                            price_mint,
+                            ata_program,
+                            &ctx.accounts.token_program,
+                            &ctx.accounts.system_program,
+                            &ctx.accounts.rent.to_account_info(),
+                            listing_seeds,
+                            &[],
+                            listing.agreed_price.unwrap(),
+                            true
+                        )?;
 
                         assert_keys_equal(listing.seller, seller_ata.key())?;
 
                         let ix = anchor_lang::solana_program::system_instruction::transfer(
                             &listing.key(),
                             &listing.seller,
-                            listing.price.unwrap(),
+                            listing_price_sans_royalties,
                         );
                         anchor_lang::solana_program::program::invoke(
                             &ix,

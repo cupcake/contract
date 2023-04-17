@@ -78,7 +78,10 @@ pub struct Listing {
     pub price_mint: Option<Pubkey>,
 
     /// If unset, only taking offers, if set, and an offer is made at or above this price, it is auto-accepted
-    pub price: Option<u64>,
+    pub set_price: Option<u64>,
+
+    /// Agreed upon price
+    pub agreed_price: Option<u64>,
 
     /// Bump value used in the PDA generation for this Listing.
     pub bump: u8,
@@ -103,6 +106,7 @@ pub struct Offer {
     pub tag: Pubkey,
 
     /// If unset, assumed to be SOL, duplicative with the Listing but makes for easier data lookup by front end
+    /// Also its possible for user or cupcake to have changed mint type since listing was made
     pub offer_mint: Option<Pubkey>,
 
     /// Offer amount
@@ -124,6 +128,7 @@ impl Listing {
         33 + // chosen buyer
         33 + // price mint
         9 + // price
+        9 + // agreed price
         2 + // PDA bump
         50; // buffer
 }
