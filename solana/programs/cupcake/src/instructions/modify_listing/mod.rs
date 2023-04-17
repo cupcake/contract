@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, Mint, TokenAccount};
-use mpl_token_metadata;
 use crate::errors::ErrorCode;
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
 use crate::state::{bakery::*, sprinkle::*};
@@ -37,7 +36,6 @@ pub struct ModifyListing<'info> {
     pub payer: Signer<'info>,
 
     /// PDA which stores token approvals for a Bakery, and executes the transfer during claims.
-    #[account(mut)]
     pub config: Box<Account<'info, Config>>,
 
     /// PDA which stores data about the state of a Sprinkle.
@@ -196,6 +194,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 // Refund the buyer, if there is one.
                 if let Some(buyer) = listing.chosen_buyer {
                     if let Some(price_mint) = listing.price_mint {
+                        require!(ctx.accounts.buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
+                        require!(ctx.accounts.listing_token.is_some(), ErrorCode::NoListingTokenPresent);
 
                         let buyer_token_acct = ctx.accounts.buyer_token.clone().unwrap();
                         assert_is_ata(
@@ -204,19 +204,18 @@ pub fn handler<'a, 'b, 'c, 'info>(
                             &price_mint, 
                             None)?;
 
-                        let listing_token_acc: Account<TokenAccount> = Account::try_from(&listing_token.clone().unwrap())?;
-                        let amount_in_residence = listing_token_acc.amount;
-
                         let cpi_accounts = token::Transfer {
-                            from: listing_token_acc.to_account_info(),
+                            from: ctx.accounts.listing_token.clone().unwrap().to_account_info(),
                             to: buyer_token_acct.to_account_info(),
                             authority: listing.to_account_info(),
                         };
                         let context =
                             CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-                        token::transfer(context.with_signer(&[&listing_seeds[..]]), amount_in_residence)?;
+                        token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.agreed_price.unwrap())?;
             
                     } else { 
+                        require!(ctx.accounts.buyer.is_some(), ErrorCode::NoBuyerPresent);
+
                         let amount_in_residence = listing.to_account_info().lamports().
                             checked_sub(Rent::get()?.minimum_balance(Listing::SIZE)).
                             ok_or(ErrorCode::NumericalOverflowError)?;

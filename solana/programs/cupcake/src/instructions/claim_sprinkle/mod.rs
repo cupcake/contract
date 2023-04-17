@@ -707,15 +707,14 @@ pub fn handler<'a, 'b, 'c, 'info>(
                             false
                         )?;
                         // Make sure listing ata is correct
-                        assert_derivation_with_bump(
+                        assert_derivation(
                             ctx.program_id,
                             listing_token_account,
                             &[
                                 &PDA_PREFIX[..], 
                                 &config.authority.as_ref()[..], 
                                 &tag.uid.to_le_bytes()[..], 
-                                &LISTING[..], &TOKEN[..], 
-                                &[listing.token_bump]],
+                                &LISTING[..], &TOKEN[..]],
                                 )?;
                         assert_is_ata(
                             &seller_ata,
