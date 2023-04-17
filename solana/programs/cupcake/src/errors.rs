@@ -85,4 +85,22 @@ pub enum ErrorCode {
 
     #[msg("Can only scan from claim")]
     CannotScanFromModify,
+
+    #[msg("No buyer token account present")]
+    NoBuyerTokenPresent,
+
+    #[msg("No listing token account present")]
+    NoListingTokenPresent,
+
+    #[msg("No offer token account present")]
+    NoOfferTokenPresent,
+
+    #[msg("No buyer present")]
+    NoBuyerPresent,
+
+    #[msg("No transfer authority present")]
+    NoTransferAuthorityPresent,
+
+    #[msg("No price mint present")]
+    NoPriceMintPresent,
 }

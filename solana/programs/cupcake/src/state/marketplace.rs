@@ -85,9 +85,6 @@ pub struct Listing {
 
     /// Bump value used in the PDA generation for this Listing.
     pub bump: u8,
-
-    /// Bump value used in the PDA generation for this Listing.
-    pub token_bump: u8,
 }
 
 /// Offer with seed [cupcake, bakery, tag, buyer]
@@ -104,6 +101,9 @@ pub struct Offer {
 
     /// Tag lookup for front end
     pub tag: Pubkey,
+
+    /// Original payer of the token account and this account
+    pub fee_payer: Pubkey,
 
     /// If unset, assumed to be SOL, duplicative with the Listing but makes for easier data lookup by front end
     /// Also its possible for user or cupcake to have changed mint type since listing was made
@@ -129,7 +129,7 @@ impl Listing {
         33 + // price mint
         9 + // price
         9 + // agreed price
-        2 + // PDA bump
+        1 + // PDA bump
         50; // buffer
 }
 
@@ -138,6 +138,7 @@ impl Offer {
     pub const SIZE: usize = 8 +     // Anchor discriminator
         1 + // version
         32 +    // Tag pubkey
+        32 +    // fee payer pubkey
         33 + // offer mint
         8 + // offer amount
         2 +  // PDA bump
