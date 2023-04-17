@@ -1,26 +1,12 @@
-use std::str::FromStr;
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::solana_program::program::{invoke_signed, invoke};
-use anchor_lang::solana_program::system_program;
-use anchor_spl::token::{self, Token, Mint};
-use mpl_token_auth_rules::payload::Payload;
+use anchor_spl::token::{self, Token, Mint, TokenAccount};
 use mpl_token_metadata;
-use mpl_token_metadata::instruction::{
-    thaw_delegated_account, freeze_delegated_account, 
-    mint_new_edition_from_master_edition_via_token
-};
-use mpl_token_metadata::processor::AuthorizationData;
-use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
-use crate::state::{bakery::*, sprinkle::*, user_info::*};
+use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{
     create_program_token_account_if_not_present,
-    assert_is_ata, assert_keys_equal, 
-    create_or_allocate_account_raw, 
-    sighash, grab_update_authority, 
-    get_master_edition_supply,
+    assert_is_ata
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -29,7 +15,7 @@ pub struct PriceSettings {
     price_mint: Option<Pubkey>,
     /// Set to None if you only want to use Offers, if set to something, any offer at or above price
     /// will auto accept. Like buy it now
-    price: Option<u64>,
+    set_price: Option<u64>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -99,7 +85,15 @@ pub struct ModifyListing<'info> {
     pub listing_token: Option<UncheckedAccount<'info>>,
 
     /// Mint of type of money you want to be accepted for this listing
-    pub price_mint: Option<Account<'info, Mint>>
+    pub price_mint: Option<Account<'info, Mint>>,
+
+    /// Buyer's token account, if they are using a token to pay for this listing
+    #[account(mut)]
+    pub buyer_token: Option<Account<'info, TokenAccount>>,
+
+    /// Buyer, if present
+    #[account(mut, constraint= listing.chosen_buyer.is_none() || listing.chosen_buyer == Some(buyer.key()))] 
+    pub buyer: Option<UncheckedAccount<'info>>,
 }
 
 
@@ -108,86 +102,145 @@ pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, ModifyListing<'info>>,
     args: ModifyListingArgs
   ) -> Result<()> {   
-      let tag = &mut ctx.accounts.tag;
-      let config = &ctx.accounts.config;
-      let payer = &ctx.accounts.payer;
-      let mut listing = &mut ctx.accounts.listing;
-      let system_program = &ctx.accounts.system_program;
-      let rent = &ctx.accounts.rent;
-      let token_program = &ctx.accounts.token_program;
-      let listing_token = &ctx.accounts.listing_token;
-      let price_mint = &ctx.accounts.price_mint;
-      let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
-      let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
-      let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
+        let tag = &mut ctx.accounts.tag;
+        let config = &ctx.accounts.config;
+        let payer = &ctx.accounts.payer;
+        let listing = &mut ctx.accounts.listing;
+        let system_program = &ctx.accounts.system_program;
+        let rent = &ctx.accounts.rent;
+        let token_program = &ctx.accounts.token_program;
+        let listing_token = &ctx.accounts.listing_token;
+        let price_mint = &ctx.accounts.price_mint;
+        let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
       
 
-      if args.next_state == Some(ListingState::Initialized) {
-        listing.bump = *ctx.bumps.get("listing").unwrap();
-      }
-
-
-      if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) {
-        return Err(ErrorCode::MustUseConfigAsPayer.into());
-      }
-
-      if payer.key() != config.authority && listing.state != ListingState::Initialized {
-        return Err(ErrorCode::MustUseConfigAsPayer.into());
-      }
-
-      if let Some(settings) = args.price_settings {
-        if listing.state == ListingState::Initialized || 
-            listing.state == ListingState::Received {
-            listing.price_mint = settings.price_mint;
-            listing.price = settings.price;
-
-            if listing.price_mint.is_some() {
-                let listing_token_unwrapped = match listing_token {
-                    Some(lt) => lt,
-                    None => return Err(ErrorCode::MustSendUpListingTokenAccount.into())
-                };
-
-                let price_mint_unwrapped = match price_mint {
-                    Some(mint) => mint,
-                    None => return Err(ErrorCode::MustSendUpPriceMint.into())
-                };
-                
-                create_program_token_account_if_not_present(
-                    listing_token_unwrapped,
-                    system_program,
-                    payer,
-                    token_program,
-                    price_mint_unwrapped,
-                    &listing.to_account_info(),
-                    rent,
-                    listing_seeds
-                )?;
-            }
-        } else {
-            return Err(ErrorCode::CannotChangePriceSettingsInThisState.into());
+        if args.next_state == Some(ListingState::Initialized) {
+            listing.bump = *ctx.bumps.get("listing").unwrap();
         }
-      }
 
-      if let Some(collection) = args.collection {
-        listing.collection = collection;
-      }
+        // User can only create the listing, after that, cupcake must do the rest.
+        if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) {
+            return Err(ErrorCode::MustUseConfigAsPayer.into());
+        }
 
-      let amount_in_residence = listing.to_account_info().lamports();
-      if listing.price_mint.is_some() {
+        if payer.key() != config.authority && listing.state != ListingState::Initialized {
+            return Err(ErrorCode::MustUseConfigAsPayer.into());
+        }
 
-      }
+        // Scanned is a frozen endpoint, cannot move from here.
+        require!(listing.state != ListingState::Scanned, ErrorCode::ListingFrozen);
 
-      if let Some(next_state) = args.next_state {
-        if next_state == ListingState::Received || next_state == ListingState::Initialized {
-            // Since only we can move back to received, presumably we wont move it while
-            require!(listing.price_mint.is_none() || listing_token_account.amount() == 0, ErrorCode::ListingAtaMustBeEmpty);
+        // Scanning can only happen from claim.
+        require!(args.next_state != Some(ListingState::Scanned), ErrorCode::CannotScanFromModify);
+
+        // To move into the accepted state, please use the accept offer instruction as seller,
+        // or as buyer, make bid that is above or at asking price.
+        require!(args.next_state != Some(ListingState::Accepted), ErrorCode::CannotAcceptFromModify);
+
+
+        if let Some(settings) = args.price_settings {
+            // Can only change the price mint or price during initialized/received.
+            // Once it is for sale, there will be bids with escrowed coins potentially of wrong mints or amounts that could be accepted.
+            // In ForSale, to make things easier, we allow price changes, but not mint changes. However, bids that do become eligible for auto-acceptance
+            // won't be - they will need to be closed and remade, or accepted manually by the seller.
+            if listing.state == ListingState::Initialized || 
+                listing.state == ListingState::Received ||
+                args.next_state == Some(ListingState::Initialized) ||
+                args.next_state == Some(ListingState::Received)  {
+                listing.price_mint = settings.price_mint;
+                listing.set_price = settings.set_price;
+
+                if listing.price_mint.is_some() {
+                    let listing_token_unwrapped = match listing_token {
+                        Some(lt) => lt,
+                        None => return Err(ErrorCode::MustSendUpListingTokenAccount.into())
+                    };
+
+                    let price_mint_unwrapped = match price_mint {
+                        Some(mint) => mint,
+                        None => return Err(ErrorCode::MustSendUpPriceMint.into())
+                    };
+                    
+                    create_program_token_account_if_not_present(
+                        listing_token_unwrapped,
+                        system_program,
+                        payer,
+                        token_program,
+                        price_mint_unwrapped,
+                        &listing.to_account_info(),
+                        rent,
+                        listing_seeds
+                    )?;
+                }
+            } else if listing.state == ListingState::ForSale {
+                // Regardless of what state you are transitioning to, if you are in ForSale, you can only change the price, for simplicity. We could detect
+                // if you were going back to initialized or received and then allow for mint changes but let's not be greedy.
+
+                listing.set_price = settings.set_price;
                 
-            
-            listing.chosen_buyer = None;
-          }
-      } 
+                require!(listing.price_mint == settings.price_mint, ErrorCode::CannotChangePriceMintInThisState);
+            } else {
+                return Err(ErrorCode::CannotChangePriceSettingsInThisState.into());
+            }
+        }
 
-      
+        // Change filtering collection whenever you want.
+        if let Some(collection) = args.collection {
+            listing.collection = collection;
+        }
+
+
+        if let Some(next_state) = args.next_state {
+            if next_state == ListingState::Received || next_state == ListingState::Initialized || next_state == ListingState::ForSale ||
+                next_state == ListingState::UserCanceled || next_state == ListingState::CupcakeCanceled {
+                // Refund the buyer, if there is one.
+                if let Some(buyer) = listing.chosen_buyer {
+                    if let Some(price_mint) = listing.price_mint {
+
+                        let buyer_token_acct = ctx.accounts.buyer_token.clone().unwrap();
+                        assert_is_ata(
+                            &buyer_token_acct.to_account_info(), 
+                            &buyer, 
+                            &price_mint, 
+                            None)?;
+
+                        let listing_token_acc: Account<TokenAccount> = Account::try_from(&listing_token.clone().unwrap())?;
+                        let amount_in_residence = listing_token_acc.amount;
+
+                        let cpi_accounts = token::Transfer {
+                            from: listing_token_acc.to_account_info(),
+                            to: buyer_token_acct.to_account_info(),
+                            authority: listing.to_account_info(),
+                        };
+                        let context =
+                            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+                        token::transfer(context.with_signer(&[&listing_seeds[..]]), amount_in_residence)?;
+            
+                    } else { 
+                        let amount_in_residence = listing.to_account_info().lamports().
+                            checked_sub(Rent::get()?.minimum_balance(Listing::SIZE)).
+                            ok_or(ErrorCode::NumericalOverflowError)?;
+
+                        let ix = anchor_lang::solana_program::system_instruction::transfer(
+                            &listing.key(),
+                            &buyer,
+                            amount_in_residence,
+                        );
+                        anchor_lang::solana_program::program::invoke(
+                            &ix,
+                            &[
+                                listing.to_account_info(),
+                                ctx.accounts.buyer.clone().unwrap().to_account_info(),
+                            ],
+                        )?;
+                    }
+                }
+                
+                listing.chosen_buyer = None;
+            }
+        } 
+
+    listing.state = args.next_state.unwrap_or(listing.state);
     Ok(())
 }
 

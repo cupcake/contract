@@ -65,9 +65,6 @@ pub enum ErrorCode {
     #[msg("Cannot change price setting during this state")]
     CannotChangePriceSettingsInThisState,
 
-    #[msg("Listing ATA must be empty to move")]
-    ListingAtaMustBeEmpty,
-
     #[msg("If you are going to use a price_mint, you need to send up the listing token account to modify this listing")]
     MustSendUpListingTokenAccount,
 
@@ -76,4 +73,16 @@ pub enum ErrorCode {
 
     #[msg("Numerical Overflow")]
     NumericalOverflow,
+
+    #[msg("Listing has been scanned and is now frozen")]
+    ListingFrozen,
+
+    #[msg("Can only accept a bid from the accept endpoint")]
+    CannotAcceptFromModify,
+
+    #[msg("Can only change price, not its mint type, while in for sale mode")]
+    CannotChangePriceMintInThisState,
+
+    #[msg("Can only scan from claim")]
+    CannotScanFromModify,
 }
