@@ -22,7 +22,7 @@ use crate::utils::{
     get_master_edition_supply,
     assert_derivation_with_bump,
     assert_derivation,
-    pay_creator_fees
+    empty_listing_escrow_to_seller, EmptyListingEscrowToSellerArgs
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -149,7 +149,7 @@ pub struct ClaimTag<'info> {
         // token_account_info (w) - either configs or yours depending on who pays
 // -
 
-pub fn handler<'a, 'b, 'c, 'info>(
+pub fn handler<'a: 'info, 'b: 'info, 'c: 'info, 'info>(
   ctx: Context<'a, 'b, 'c, 'info, ClaimTag<'info>>,
   creator_bump: u8, // Ignored except in candy machine use and hotpotato use. In hotpotato is used to make the token account.
 ) -> Result<()> {   
@@ -687,86 +687,25 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
 
                 if listing.state == ListingState::Shipped {
-                    if let Some(mint) = listing.price_mint {
-                        assert_keys_equal(price_mint.key(), mint)?;
-
-                        let listing_price_sans_royalties = pay_creator_fees(
-                            &mut ctx.remaining_accounts[11..].into_iter(),
-                            token_metadata,
-                            listing_token_account,
-                            &listing.to_account_info(),
-                            payer,
-                            price_mint,
-                            ata_program,
-                            &ctx.accounts.token_program,
-                            &ctx.accounts.system_program,
-                            &ctx.accounts.rent.to_account_info(),
-                            listing_seeds,
-                            &[],
-                            listing.agreed_price.unwrap(),
-                            false
-                        )?;
-                        // Make sure listing ata is correct
-                        assert_derivation(
-                            ctx.program_id,
-                            listing_token_account,
-                            &[
-                                &PDA_PREFIX[..], 
-                                &config.authority.as_ref()[..], 
-                                &tag.uid.to_le_bytes()[..], 
-                                &LISTING[..], &TOKEN[..]],
-                                )?;
-                        assert_is_ata(
-                            &seller_ata,
-                            &listing.seller,
-                            &mint,
-                            None,
-                        )?; 
-
-                        // Transfer the tokens.
-                        let cpi_accounts = token::Transfer {
-                            from: listing_token_account.clone(),
-                            to: seller_ata.clone(),
-                            authority: listing.to_account_info(),
-                        };
-                        let context =
-                            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-                        token::transfer(context.with_signer(&[&listing_seeds[..]]), listing_price_sans_royalties)?;
-                    } else {
-
-                        let listing_price_sans_royalties = pay_creator_fees(
-                            &mut ctx.remaining_accounts[11..].into_iter(),
-                            token_metadata,
-                            &listing.to_account_info(),
-                            &listing.to_account_info(),
-                            payer,
-                            price_mint,
-                            ata_program,
-                            &ctx.accounts.token_program,
-                            &ctx.accounts.system_program,
-                            &ctx.accounts.rent.to_account_info(),
-                            listing_seeds,
-                            &[],
-                            listing.agreed_price.unwrap(),
-                            true
-                        )?;
-
-                        assert_keys_equal(listing.seller, seller_ata.key())?;
-
-                        let ix = anchor_lang::solana_program::system_instruction::transfer(
-                            &listing.key(),
-                            &listing.seller,
-                            listing_price_sans_royalties,
-                        );
-                        anchor_lang::solana_program::program::invoke(
-                            &ix,
-                            &[
-                                listing_data.to_account_info(),
-                                // Not actually an ata in this case, is just the seller's account
-                                seller_ata.to_account_info(),
-                            ],
-                        )?;
-                    }
+                    let rent = ctx.accounts.rent.to_account_info();
+                    empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
+                        remaining_accounts: ctx.remaining_accounts,
+                        config,
+                        tag,
+                        listing_data,
+                        listing: &listing,
+                        listing_token_account,
+                        listing_seeds,
+                        token_metadata,
+                        payer,
+                        price_mint,
+                        ata_program,
+                        token_program: &ctx.accounts.token_program,
+                        system_program: &ctx.accounts.system_program,
+                        rent: &rent,
+                        seller_ata,
+                        program_id: ctx.program_id,
+                    })?;
 
                     let mut data = listing_data.data.borrow_mut();
                     data[8+1+32+32]=ListingState::Scanned as u8;

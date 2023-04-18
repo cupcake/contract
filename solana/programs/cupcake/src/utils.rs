@@ -1,9 +1,12 @@
-use crate::errors::ErrorCode;
+use crate::{
+    errors::ErrorCode,
+    state::{Config, Listing, Tag, LISTING, PDA_PREFIX, TOKEN},
+};
 use anchor_lang::{
     error,
     prelude::{
-        next_account_info, Account, AccountInfo, Program, Pubkey, Rent, Result, System, Sysvar,
-        UncheckedAccount,
+        next_account_info, Account, AccountInfo, CpiContext, Program, Pubkey, Rent, Result, System,
+        Sysvar, UncheckedAccount,
     },
     require,
     solana_program::{
@@ -16,7 +19,7 @@ use anchor_lang::{
 };
 use anchor_spl::{
     associated_token::get_associated_token_address,
-    token::{Mint, Token},
+    token::{self, Mint, Token},
 };
 use arrayref::array_ref;
 use mpl_token_metadata::state::{Creator, Metadata, TokenMetadataAccount};
@@ -268,11 +271,11 @@ pub fn make_ata<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn pay_creator_fees<'a>(
+pub fn pay_creator_fees<'a, 'c>(
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
     metadata_info: &AccountInfo<'a>,
     escrow_payment_account: &AccountInfo<'a>,
-    payment_account_owner: &AccountInfo<'a>,
+    payment_account_owner: &AccountInfo<'c>,
     fee_payer: &AccountInfo<'a>,
     treasury_mint: &AccountInfo<'a>,
     ata_program: &AccountInfo<'a>,
@@ -305,7 +308,6 @@ pub fn pay_creator_fees<'a>(
 
     pay_creator(
         remaining_accounts,
-        metadata_info,
         escrow_payment_account,
         payment_account_owner,
         fee_payer,
@@ -316,7 +318,6 @@ pub fn pay_creator_fees<'a>(
         rent,
         signer_seeds,
         fee_payer_seeds,
-        size,
         is_native,
         Creator {
             address: Pubkey::from_str(OUR_ADDRESS).unwrap(),
@@ -340,7 +341,6 @@ pub fn pay_creator_fees<'a>(
                     .ok_or(ErrorCode::NumericalOverflow)?;
                 pay_creator(
                     remaining_accounts,
-                    metadata_info,
                     escrow_payment_account,
                     payment_account_owner,
                     fee_payer,
@@ -351,7 +351,6 @@ pub fn pay_creator_fees<'a>(
                     rent,
                     signer_seeds,
                     fee_payer_seeds,
-                    size,
                     is_native,
                     creator,
                     creator_fee,
@@ -368,11 +367,10 @@ pub fn pay_creator_fees<'a>(
         .ok_or(ErrorCode::NumericalOverflow)?)
 }
 
-pub fn pay_creator<'a>(
+pub fn pay_creator<'a, 'c>(
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
-    metadata_info: &AccountInfo<'a>,
     escrow_payment_account: &AccountInfo<'a>,
-    payment_account_owner: &AccountInfo<'a>,
+    payment_account_owner: &AccountInfo<'c>,
     fee_payer: &AccountInfo<'a>,
     treasury_mint: &AccountInfo<'a>,
     ata_program: &AccountInfo<'a>,
@@ -381,7 +379,6 @@ pub fn pay_creator<'a>(
     rent: &AccountInfo<'a>,
     signer_seeds: &[&[u8]],
     fee_payer_seeds: &[&[u8]],
-    size: u64,
     is_native: bool,
     creator: Creator,
     creator_fee: u64,
@@ -441,6 +438,128 @@ pub fn pay_creator<'a>(
                 system_program.clone(),
             ],
             &[signer_seeds],
+        )?;
+    }
+
+    Ok(())
+}
+
+pub struct EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
+    pub remaining_accounts: &'c [AccountInfo<'info>],
+    pub config: &'b Account<'info, Config>,
+    pub tag: &'b Account<'info, Tag>,
+    pub listing_data: &'c AccountInfo<'info>,
+    pub listing: &'d Account<'info, Listing>,
+    pub listing_token_account: &'c AccountInfo<'info>,
+    pub listing_seeds: &'d [&'d [u8]],
+    pub token_metadata: &'c AccountInfo<'info>,
+    pub payer: &'b AccountInfo<'info>,
+    pub price_mint: &'c AccountInfo<'info>,
+    pub ata_program: &'c AccountInfo<'info>,
+    pub token_program: &'b AccountInfo<'info>,
+    pub system_program: &'b AccountInfo<'info>,
+    pub rent: &'d AccountInfo<'info>,
+    pub seller_ata: &'c AccountInfo<'info>,
+    pub program_id: &'a Pubkey,
+}
+
+pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
+    args: EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd>,
+) -> Result<()> {
+    let EmptyListingEscrowToSellerArgs {
+        config,
+        tag,
+        remaining_accounts,
+        listing,
+        listing_data,
+        listing_token_account,
+        listing_seeds,
+        token_metadata,
+        payer,
+        price_mint,
+        ata_program,
+        token_program,
+        system_program,
+        rent,
+        program_id,
+        seller_ata,
+    } = args;
+    if let Some(mint) = listing.price_mint {
+        assert_keys_equal(price_mint.key(), mint)?;
+
+        let listing_price_sans_royalties = pay_creator_fees(
+            &mut remaining_accounts[11..].into_iter(),
+            token_metadata,
+            listing_token_account,
+            &listing.to_account_info(),
+            payer,
+            price_mint,
+            ata_program,
+            token_program,
+            system_program,
+            &rent.to_account_info(),
+            listing_seeds,
+            &[],
+            listing.agreed_price.unwrap(),
+            false,
+        )?;
+        // Make sure listing ata is correct
+        assert_derivation(
+            program_id,
+            listing_token_account,
+            &[
+                &PDA_PREFIX[..],
+                &config.authority.as_ref()[..],
+                &tag.uid.to_le_bytes()[..],
+                &LISTING[..],
+                &TOKEN[..],
+            ],
+        )?;
+        assert_is_ata(&seller_ata, &listing.seller, &mint, None)?;
+
+        // Transfer the tokens.
+        let cpi_accounts = token::Transfer {
+            from: listing_token_account.clone(),
+            to: seller_ata.clone(),
+            authority: listing.to_account_info(),
+        };
+        let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
+        token::transfer(
+            context.with_signer(&[&listing_seeds[..]]),
+            listing_price_sans_royalties,
+        )?;
+    } else {
+        let listing_price_sans_royalties = pay_creator_fees(
+            &mut remaining_accounts[11..].into_iter(),
+            token_metadata,
+            &listing.to_account_info(),
+            &listing.to_account_info(),
+            payer,
+            price_mint,
+            ata_program,
+            &token_program,
+            &system_program,
+            &rent.to_account_info(),
+            listing_seeds,
+            &[],
+            listing.agreed_price.unwrap(),
+            true,
+        )?;
+
+        assert_keys_equal(listing.seller, seller_ata.key())?;
+
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &listing.key(),
+            &listing.seller,
+            listing_price_sans_royalties,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                listing_data.to_account_info(),
+                // Not actually an ata in this case, is just the seller's account
+                seller_ata.to_account_info(),
+            ],
         )?;
     }
 
