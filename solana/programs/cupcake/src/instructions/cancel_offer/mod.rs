@@ -1,23 +1,22 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Mint};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, Offer, TOKEN, OFFER};
+use crate::state::{PDA_PREFIX, LISTING, Listing, Offer, TOKEN, OFFER, ListingState};
 use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{
     assert_is_ata,
-    create_program_token_account_if_not_present
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
-pub struct MakeOfferArgs {
+pub struct CancelOfferArgs {
     offer_amount: u64
 }
 
 #[derive(Accounts)]
-pub struct MakeOffer<'info> {
+pub struct CancelOffer<'info> {
     /// Account which pays the network and rent fees, for this transaction only.
-    #[account(mut)]
-    pub payer: Signer<'info>,
+    #[account(mut, constraint=offer.fee_payer==payer.key())]
+    pub payer: UncheckedAccount<'info>,
 
     /// PDA which stores token approvals for a Bakery, and executes the transfer during claims.
     pub config: Box<Account<'info, Config>>,
@@ -36,11 +35,11 @@ pub struct MakeOffer<'info> {
     pub listing: Box<Account<'info, Listing>>,
 
 
-    /// Buyer, must be a signer if using SOL
+    /// Buyer
     #[account(mut)] 
     pub buyer: UncheckedAccount<'info>,
 
-    #[account(init,
+    #[account(mut,
         seeds=[
             PDA_PREFIX, 
             config.authority.key().as_ref(), 
@@ -49,9 +48,7 @@ pub struct MakeOffer<'info> {
             OFFER,
             buyer.key().as_ref()
         ],
-        bump,
-        payer=payer,
-        space=Offer::SIZE
+        bump=offer.bump,
     )] 
     pub offer: Box<Account<'info, Offer>>,
 
@@ -60,9 +57,6 @@ pub struct MakeOffer<'info> {
 
     /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
-
-    /// SPL Rent Sysvar, required for account allocation.
-    pub rent: Sysvar<'info, Rent>,
 
     /// Needed if this is a price mint and not sol
     #[account(mut, 
@@ -81,18 +75,15 @@ pub struct MakeOffer<'info> {
     #[account(mut)]
     pub buyer_token: Option<Account<'info, TokenAccount>>,
 
-    /// Transfer authority to move out of buyer token account
-    pub transfer_authority: Option<Signer<'info>>,
-
-    /// Price mint
+    /// Price mint, if needed
     pub price_mint: Option<Account<'info, Mint>>,
 }
 
 
 
 pub fn handler<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, MakeOffer<'info>>,
-    args: MakeOfferArgs
+    ctx: Context<'a, 'b, 'c, 'info, CancelOffer<'info>>,
+    args: CancelOfferArgs
   ) -> Result<()> {   
     let config = &mut ctx.accounts.config;
     let tag = &mut ctx.accounts.tag;
@@ -100,10 +91,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let offer_token = &ctx.accounts.offer_token;
     let buyer_token = &ctx.accounts.buyer_token;
     let offer = &mut ctx.accounts.offer;
-    let transfer_authority = &mut ctx.accounts.transfer_authority;
-    let system_program = &mut ctx.accounts.system_program;
-    let rent = &mut ctx.accounts.rent;
-    let token_program = &mut ctx.accounts.token_program;
     let payer = &mut ctx.accounts.payer;
     let price_mint = &ctx.accounts.price_mint;
     let buyer = &ctx.accounts.buyer;
@@ -119,22 +106,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[offer.bump]
     ];
 
-    offer.bump = *ctx.bumps.get("offer").unwrap();
-
-    offer.buyer = *buyer.key;
-
-    offer.fee_payer = *payer.key;
-
-    offer.offer_amount = args.offer_amount;
-
-    offer.offer_mint = listing.price_mint;
-
-    offer.tag = tag.key();
+    if listing.state != ListingState::UserCanceled && listing.state != ListingState::CupcakeCanceled && listing.state != ListingState::Returned {
+        require!(buyer.is_signer, ErrorCode::BuyerMustSign);
+    }
 
     if let Some(mint) = listing.price_mint {
         require!(buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
         require!(offer_token.is_some(), ErrorCode::NoOfferTokenPresent);
-        require!(transfer_authority.is_some(), ErrorCode::NoTransferAuthorityPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 
         let buyer_token_acct = buyer_token.clone().unwrap();
@@ -144,40 +122,31 @@ pub fn handler<'a, 'b, 'c, 'info>(
             &mint, 
             None)?;
 
-        create_program_token_account_if_not_present(
-            &offer_token.clone().unwrap(),
-            system_program,
-            payer,
-            token_program,
-            &price_mint.clone().unwrap(),
-            &offer.to_account_info(),
-            rent,
-            offer_seeds
-        )?;
-
         let cpi_accounts = token::Transfer {
-            from: buyer_token_acct.to_account_info(),
-            to: offer_token.clone().unwrap().to_account_info(),
-            authority: transfer_authority.clone().unwrap().to_account_info(),
+            from: offer_token.clone().unwrap().to_account_info(),
+            to: buyer_token_acct.to_account_info(),
+            authority: offer.to_account_info(),
         };
         let context =
             CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-        token::transfer(context, args.offer_amount)?;
+        token::transfer(context.with_signer(&[&offer_seeds[..]]), args.offer_amount)?;
     } else {
         let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &buyer.key(),
             &offer.key(),
+            &buyer.key(),
             args.offer_amount,
         );
 
         anchor_lang::solana_program::program::invoke(
             &ix,
             &[
-                buyer.to_account_info(),
                 offer.to_account_info(),
+                buyer.to_account_info(),
             ],
         )?;
     }
+
+    offer.close(payer.to_account_info())?;
     Ok(())
 }
 

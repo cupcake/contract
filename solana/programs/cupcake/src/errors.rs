@@ -103,4 +103,25 @@ pub enum ErrorCode {
 
     #[msg("No price mint present")]
     NoPriceMintPresent,
+
+    #[msg("No token metadata for this tag present but is required for this transaction")]
+    NoTokenMetadataPresent,
+
+    #[msg("No seller ata present")]
+    NoSellerAtaPresent,
+
+    #[msg("No ata program present")]
+    NoAtaProgramPresent,
+
+    #[msg("Price mint mismatch")]
+    PriceMintMismatch,
+
+    #[msg("Buyer must sign when listing is active")]
+    BuyerMustSign,
+
+    #[msg("Cannot delete listing unless it is cancelled or returned")]
+    CannotDeleteListingInThisState,
+
+    #[msg("Cannot close listing if token account has a balance greater than zero")]
+    ListingTokenHasBalance,
 }
