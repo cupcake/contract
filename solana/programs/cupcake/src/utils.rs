@@ -271,11 +271,11 @@ pub fn make_ata<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn pay_creator_fees<'a, 'c>(
+pub fn pay_creator_fees<'a>(
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
     metadata_info: &AccountInfo<'a>,
     escrow_payment_account: &AccountInfo<'a>,
-    payment_account_owner: &AccountInfo<'c>,
+    payment_account_owner: &AccountInfo<'a>,
     fee_payer: &AccountInfo<'a>,
     treasury_mint: &AccountInfo<'a>,
     ata_program: &AccountInfo<'a>,
@@ -367,10 +367,10 @@ pub fn pay_creator_fees<'a, 'c>(
         .ok_or(ErrorCode::NumericalOverflow)?)
 }
 
-pub fn pay_creator<'a, 'c>(
+pub fn pay_creator<'a>(
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
     escrow_payment_account: &AccountInfo<'a>,
-    payment_account_owner: &AccountInfo<'c>,
+    payment_account_owner: &AccountInfo<'a>,
     fee_payer: &AccountInfo<'a>,
     treasury_mint: &AccountInfo<'a>,
     ata_program: &AccountInfo<'a>,
@@ -528,6 +528,14 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
             context.with_signer(&[&listing_seeds[..]]),
             listing_price_sans_royalties,
         )?;
+
+        let cpi_accounts = token::CloseAccount {
+            account: listing_token_account.clone(),
+            destination: payer.to_account_info(),
+            authority: listing.to_account_info(),
+        };
+        let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
+        token::close_account(context.with_signer(&[&listing_seeds[..]]))?;
     } else {
         let listing_price_sans_royalties = pay_creator_fees(
             &mut remaining_accounts[11..].into_iter(),

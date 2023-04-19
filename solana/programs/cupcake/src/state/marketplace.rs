@@ -33,6 +33,9 @@ pub enum ListingState {
     /// The good is now shipped and will be claimed at some point.
     Shipped,
 
+    // Returned to seller for one reason or another. Normally follows Canceled state.
+    Returned,
+
     /// The tag has been scanned and now tokens are receivable
     /// This is the only state where the seller can claim the tokens
     /// At two weeks out, this PDA can be permissionlessly destroyed and cleaned up for lamports
@@ -71,6 +74,9 @@ pub struct Listing {
     pub collection: Pubkey,
 
     pub state: ListingState,
+
+    /// Original payer of the token account and this account
+    pub fee_payer: Pubkey,
 
     pub chosen_buyer: Option<Pubkey>,
 
@@ -125,6 +131,7 @@ impl Listing {
         1 + // version
         32 +    // collection pubkey
         1 + // listing state
+        32 +    // original fee payer pubkey
         33 + // chosen buyer
         33 + // price mint
         9 + // price

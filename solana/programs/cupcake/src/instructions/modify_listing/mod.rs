@@ -1,11 +1,15 @@
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Token, Mint, TokenAccount};
 use crate::errors::ErrorCode;
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
 use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{
     create_program_token_account_if_not_present,
-    assert_is_ata
+    assert_is_ata,
+    empty_listing_escrow_to_seller,
+    EmptyListingEscrowToSellerArgs,
+    assert_derivation
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -92,6 +96,20 @@ pub struct ModifyListing<'info> {
     /// Buyer, if present
     #[account(mut, constraint= listing.chosen_buyer.is_none() || listing.chosen_buyer == Some(buyer.key()))] 
     pub buyer: Option<UncheckedAccount<'info>>,
+
+    /// Token metadata, if moving to scanned state
+    #[account(mut)] 
+    pub token_metadata: Option<UncheckedAccount<'info>>,
+
+
+    /// ata program, if moving to scanned state
+    pub ata_program: Option<Program<'info, AssociatedToken>>,
+
+
+    /// Seller ata is either the ata if using price mint, or is the seller itself if using SOL. Only need to pass this up if moving to scanned state, otherwise
+    /// does nothing.
+    #[account(mut)] 
+    pub seller_ata: Option<UncheckedAccount<'info>>
 }
 
 
@@ -109,27 +127,34 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let token_program = &ctx.accounts.token_program;
         let listing_token = &ctx.accounts.listing_token;
         let price_mint = &ctx.accounts.price_mint;
+        let token_metadata = &ctx.accounts.token_metadata;
+        let ata_program = &ctx.accounts.ata_program;
+        let seller_ata = &ctx.accounts.seller_ata;
         let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
       
 
         if args.next_state == Some(ListingState::Initialized) {
             listing.bump = *ctx.bumps.get("listing").unwrap();
+            listing.fee_payer = payer.key();
         }
 
-        // User can only create the listing, after that, cupcake must do the rest.
-        if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) {
+        // User can only create the listing or cancel it, after that, cupcake must do the rest.
+        if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) && args.next_state != Some(ListingState::UserCanceled) {
             return Err(ErrorCode::MustUseConfigAsPayer.into());
         }
 
         if payer.key() != config.authority && listing.state != ListingState::Initialized {
-            return Err(ErrorCode::MustUseConfigAsPayer.into());
+            // If the user is trying to do something outside of the initialized state, 
+            // then if they are trying to do something other than cancel, or they are doing it while
+            // in the shipped state, blow up. We dont want them cancelling a shipped order,
+            // and we dont want them doing any other thing than cancelling.
+            if args.next_state != Some(ListingState::UserCanceled) || listing.state == ListingState::Shipped {
+                return Err(ErrorCode::MustUseConfigAsPayer.into());
+            }
         }
 
-        // Scanned is a frozen endpoint, cannot move from here.
-        require!(listing.state != ListingState::Scanned, ErrorCode::ListingFrozen);
-
-        // Scanning can only happen from claim.
-        require!(args.next_state != Some(ListingState::Scanned), ErrorCode::CannotScanFromModify);
+        // Scanned / Returned is a frozen endpoint, cannot move from here.
+        require!(listing.state != ListingState::Scanned && listing.state != ListingState::Returned, ErrorCode::ListingFrozen);
 
         // To move into the accepted state, please use the accept offer instruction as seller,
         // or as buyer, make bid that is above or at asking price.
@@ -190,7 +215,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
         if let Some(next_state) = args.next_state {
             if next_state == ListingState::Received || next_state == ListingState::Initialized || next_state == ListingState::ForSale ||
-                next_state == ListingState::UserCanceled || next_state == ListingState::CupcakeCanceled {
+                next_state == ListingState::UserCanceled || next_state == ListingState::CupcakeCanceled || next_state == ListingState::Returned {
                 // Refund the buyer, if there is one.
                 if let Some(buyer) = listing.chosen_buyer {
                     if let Some(price_mint) = listing.price_mint {
@@ -212,7 +237,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         let context =
                             CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
                         token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.agreed_price.unwrap())?;
-            
                     } else { 
                         require!(ctx.accounts.buyer.is_some(), ErrorCode::NoBuyerPresent);
 
@@ -236,6 +260,52 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
                 
                 listing.chosen_buyer = None;
+            } else if next_state == ListingState::Scanned {
+                // Can force an escrow empty and go to scanned if we feel the package arrived.
+
+                require!(ctx.accounts.token_metadata.is_some(), ErrorCode::NoTokenMetadataPresent);
+                require!(ctx.accounts.price_mint.is_some(), ErrorCode::NoPriceMintPresent);
+                require!(ctx.accounts.ata_program.is_some(), ErrorCode::NoAtaProgramPresent);
+                require!(ctx.accounts.listing_token.is_some(), ErrorCode::NoListingTokenPresent);
+                require!(ctx.accounts.seller_ata.is_some(), ErrorCode::NoSellerAtaPresent);
+
+                let tm = token_metadata.clone().unwrap().to_account_info();
+                let pm = price_mint.clone().unwrap().to_account_info();
+                let lm = listing_token.clone().unwrap().to_account_info();
+                let seller = seller_ata.clone().unwrap().to_account_info();
+                let ap = ata_program.clone().unwrap().to_account_info();
+                let rent = ctx.accounts.rent.to_account_info();
+
+                require!(listing.price_mint.is_none() || Some(pm.key()) == listing.price_mint, ErrorCode::PriceMintMismatch);
+
+                assert_derivation(
+                    &mpl_token_metadata::id(),
+                    &tm,
+                    &[
+                        mpl_token_metadata::state::PREFIX.as_bytes(),
+                        mpl_token_metadata::id().as_ref(),
+                        tag.token_mint.as_ref(),
+                    ],
+                )?;
+
+                empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
+                    remaining_accounts: ctx.remaining_accounts,
+                    config,
+                    tag,
+                    listing_data: &listing.to_account_info(),
+                    listing: &listing,
+                    listing_token_account: &lm,
+                    listing_seeds,
+                    token_metadata: &tm,
+                    payer: &payer,
+                    price_mint: &pm,
+                    ata_program: &ap,
+                    token_program: &ctx.accounts.token_program,
+                    system_program: &ctx.accounts.system_program,
+                    rent: &rent,
+                    seller_ata: &seller,
+                    program_id: ctx.program_id,
+                })?;
             }
         } 
 

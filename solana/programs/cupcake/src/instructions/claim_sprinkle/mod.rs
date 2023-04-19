@@ -13,14 +13,13 @@ use mpl_token_metadata::instruction::{
 use mpl_token_metadata::processor::AuthorizationData;
 use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
+use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState};
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
-    assert_derivation_with_bump,
     assert_derivation,
     empty_listing_escrow_to_seller, EmptyListingEscrowToSellerArgs
 };
@@ -149,7 +148,7 @@ pub struct ClaimTag<'info> {
         // token_account_info (w) - either configs or yours depending on who pays
 // -
 
-pub fn handler<'a: 'info, 'b: 'info, 'c: 'info, 'info>(
+pub fn handler<'a, 'b, 'c, 'info>(
   ctx: Context<'a, 'b, 'c, 'info, ClaimTag<'info>>,
   creator_bump: u8, // Ignored except in candy machine use and hotpotato use. In hotpotato is used to make the token account.
 ) -> Result<()> {   
@@ -668,12 +667,6 @@ pub fn handler<'a: 'info, 'b: 'info, 'c: 'info, 'info>(
                 let listing: Account<Listing> = Account::try_from(&listing_data)?;
 
                 let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
-
-                assert_derivation_with_bump(
-                    ctx.program_id,
-                    listing_token_account,
-                    listing_seeds
-                    )?;
 
                 // Okay, you have right listing - ensure you aren't trying to potato swap during an incorrect state
 
