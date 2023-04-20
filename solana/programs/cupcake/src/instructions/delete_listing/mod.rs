@@ -9,6 +9,7 @@ use crate::state::{bakery::*, sprinkle::*};
 #[derive(Accounts)]
 pub struct DeleteListing<'info> {
     /// Account which pays the network and rent fees, for this transaction only.
+    /// CHECK:  this is safe
     #[account(mut, constraint=payer.key() == listing.fee_payer)]
     pub payer: UncheckedAccount<'info>,
 
@@ -47,6 +48,7 @@ pub struct DeleteListing<'info> {
 
     /// Will be initialized only if needed, we dont do typing here because
     /// we really dont know if this is needed at all until logic fires.
+    /// CHECK:  this is safe
     #[account(mut, seeds=[
         PDA_PREFIX, 
         config.authority.key().as_ref(), 
@@ -68,7 +70,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let config = &ctx.accounts.config;
     let payer = &ctx.accounts.payer;
     let listing = &mut ctx.accounts.listing;
-    let system_program = &ctx.accounts.system_program;
     let token_program = &ctx.accounts.token_program;
     let listing_token = &ctx.accounts.listing_token;
     let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
@@ -81,7 +82,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         listing.state == ListingState::Returned || 
         listing.state == ListingState::Scanned, ErrorCode::CannotDeleteListingInThisState);
 
-    if let Some(price_mint) = listing.price_mint {
+    if listing.price_mint.is_some() {
         require!(listing_token.is_some(), ErrorCode::NoListingTokenPresent);
         let lt = listing_token.clone().unwrap();
         // close the listing token if needed

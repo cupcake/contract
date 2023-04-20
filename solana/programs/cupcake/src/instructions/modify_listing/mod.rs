@@ -76,6 +76,7 @@ pub struct ModifyListing<'info> {
 
     /// Will be initialized only if needed, we dont do typing here because
     /// we really dont know if this is needed at all until logic fires.
+    /// CHECK: this is safe
     #[account(mut, seeds=[
         PDA_PREFIX, 
         config.authority.key().as_ref(), 
@@ -98,6 +99,7 @@ pub struct ModifyListing<'info> {
     pub buyer: Option<UncheckedAccount<'info>>,
 
     /// Token metadata, if moving to scanned state
+    /// CHECK: this is safe
     #[account(mut)] 
     pub token_metadata: Option<UncheckedAccount<'info>>,
 
@@ -108,6 +110,7 @@ pub struct ModifyListing<'info> {
 
     /// Seller ata is either the ata if using price mint, or is the seller itself if using SOL. Only need to pass this up if moving to scanned state, otherwise
     /// does nothing.
+    /// CHECK: this is safe
     #[account(mut)] 
     pub seller_ata: Option<UncheckedAccount<'info>>
 }

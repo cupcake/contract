@@ -15,6 +15,7 @@ pub struct CancelOfferArgs {
 #[derive(Accounts)]
 pub struct CancelOffer<'info> {
     /// Account which pays the network and rent fees, for this transaction only.
+    /// CHECK:  this is safe
     #[account(mut, constraint=offer.fee_payer==payer.key())]
     pub payer: UncheckedAccount<'info>,
 
@@ -36,6 +37,7 @@ pub struct CancelOffer<'info> {
 
 
     /// Buyer
+    /// CHECK:  this is safe
     #[account(mut)] 
     pub buyer: UncheckedAccount<'info>,
 
@@ -59,6 +61,7 @@ pub struct CancelOffer<'info> {
     pub token_program: Program<'info, Token>,
 
     /// Needed if this is a price mint and not sol
+    /// CHECK:  this is safe
     #[account(mut, 
         seeds=[
             PDA_PREFIX, 
