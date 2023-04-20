@@ -37,6 +37,7 @@ pub struct MakeOffer<'info> {
 
 
     /// Buyer, must be a signer if using SOL
+    /// CHECK:  this is safe
     #[account(mut)] 
     pub buyer: UncheckedAccount<'info>,
 

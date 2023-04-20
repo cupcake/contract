@@ -44,10 +44,12 @@ pub struct AcceptOffer<'info> {
     pub offer: Box<Account<'info, Offer>>,
 
     /// Buyer
+    /// CHECK:  this is safe
     #[account(mut)] 
     pub buyer: UncheckedAccount<'info>,
 
     /// Original fee payer, to receive lamports back
+    /// CHECK:  this is safe
     #[account(mut, constraint=original_fee_payer.key() == offer.fee_payer)] 
     pub original_fee_payer: UncheckedAccount<'info>,
 
@@ -69,6 +71,7 @@ pub struct AcceptOffer<'info> {
     pub listing_token: Option<UncheckedAccount<'info>>,
 
     /// Needed if this is a price mint and not sol
+    /// CHECK:  this is safe
     #[account(mut, 
         seeds=[
             PDA_PREFIX, 
