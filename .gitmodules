@@ -1,0 +1,4 @@
+[submodule "solana/site"]
+	path = solana/site
+	url = git@github.com:cupcake/site.git
+	branch = new-market-site
