@@ -7,8 +7,6 @@ import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../wip_sdk
 import { Bakery } from '../wip_sdk/state/bakery';
 
 describe('`Refillable1Of1` Sprinkle', () => {
-  anchor.setProvider(anchor.Provider.env());
-
   const admin = anchor.web3.Keypair.generate();
   const user = anchor.web3.Keypair.generate();
 
