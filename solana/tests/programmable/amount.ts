@@ -3,6 +3,7 @@ import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Cupcake } from '../../target/types/cupcake';
 import { CupcakeProgram } from '../../wip_sdk/cucpakeProgram';
+import { SolanaClient } from '../../site/cupcake-data/clients/solana/SolanaClient';
 import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../../wip_sdk/programmableAssets';
 import { Bakery } from '../../wip_sdk/state/bakery';
 
@@ -23,8 +24,11 @@ describe('Programmable with `Amount` RuleSet', () => {
     await cupcakeProgram.provider.connection.confirmTransaction(sig2, 'singleGossip');
   });
 
-  it('Should create a Bakery', async () => {
-    const createBakeryTxHash = await cupcakeProgramClient.createBakery();
+  it('Should create a Bakery boobs', async () => {
+    const createBakeryTxHash = await SolanaClient.runCreateBakeryTxn(
+      cupcakeProgramClient.bakeryAuthorityKeypair,
+      cupcakeProgramClient.bakeryAuthorityKeypair
+    );
     console.log('createBakeryTxHash', createBakeryTxHash);
   });
 
