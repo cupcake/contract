@@ -1,10 +1,10 @@
 import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { Cupcake } from '../target/types/cupcake';
-import { CupcakeProgram } from '../wip_sdk/cucpakeProgram';
-import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../wip_sdk/programmableAssets';
-import { Bakery } from '../wip_sdk/state/bakery';
+import { Cupcake } from '../../target/types/cupcake';
+import { CupcakeProgram } from '../../wip_sdk/cucpakeProgram';
+import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../../wip_sdk/programmableAssets';
+import { Bakery } from '../../wip_sdk/state/bakery';
 
 describe('`Refillable1Of1` Sprinkle', async () => {
   const admin = anchor.web3.Keypair.generate();
