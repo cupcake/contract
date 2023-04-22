@@ -2,13 +2,6 @@
 # yarn lockfile v1
 
 
-"@babel/runtime@^7.10.5":
-  version "7.21.0"
-  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.21.0.tgz#5b55c9d394e5fcf304909a8b00c07dc217b56673"
-  integrity sha512-xwII0//EObnq89Ji5AKYQaRYiW/nZ3llSv29d49IuxPhKbtJoLP+9QUUZ4nVragQVtaVGeZrpB+ZtG/Pdy/POw==
-  dependencies:
-    regenerator-runtime "^0.13.11"
-
 "@babel/runtime@^7.12.5", "@babel/runtime@^7.17.2":
   version "7.17.9"
   resolved "https://registry.npmjs.org/@babel/runtime/-/runtime-7.17.9.tgz"
@@ -158,19 +151,7 @@
   dependencies:
     buffer "~6.0.3"
 
-"@solana/spl-token@0.1.6":
-  version "0.1.6"
-  resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.1.6.tgz#fa136b0a3db84f07a99bc0e54cf4e91f2d6da2e8"
-  integrity sha512-fYj+a3w1bqWN6Ibf85XF3h2JkuxevI3Spvqi+mjsNqVUEo2AgxxTZmujNLn/jIzQDNdWkBfF/wYzH5ikcGHmfw==
-  dependencies:
-    "@babel/runtime" "^7.10.5"
-    "@solana/web3.js" "^1.12.0"
-    bn.js "^5.1.0"
-    buffer "6.0.3"
-    buffer-layout "^1.2.0"
-    dotenv "10.0.0"
-
-"@solana/spl-token@^0.3.6":
+"@solana/spl-token@0.3.7", "@solana/spl-token@^0.3.6":
   version "0.3.7"
   resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.3.7.tgz#6f027f9ad8e841f792c32e50920d9d2e714fc8da"
   integrity sha512-bKGxWTtIw6VDdCBngjtsGlKGLSmiu/8ghSt/IOYJV24BsymRbgq7r12GToeetpxmPaZYLddKwAz7+EwprLfkfg==
@@ -199,7 +180,7 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@solana/web3.js@^1.12.0", "@solana/web3.js@^1.32.0", "@solana/web3.js@^1.68.0":
+"@solana/web3.js@^1.32.0", "@solana/web3.js@^1.68.0":
   version "1.75.0"
   resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.75.0.tgz#824c6f78865007bca758ca18f268d6f7363b42e5"
   integrity sha512-rHQgdo1EWfb+nPUpHe4O7i8qJPELHKNR5PAZRK+a7XxiykqOfbaAlPt5boDWAGPnYbSv0ziWZv5mq9DlFaQCxg==
@@ -430,11 +411,6 @@ bn.js@^5.0.0, bn.js@^5.1.2, bn.js@^5.2.0:
   version "5.2.0"
   resolved "https://registry.npmjs.org/bn.js/-/bn.js-5.2.0.tgz"
   integrity sha512-D7iWRBvnZE8ecXiLj/9wbxH7Tk79fAh8IHaTNq1RWRixsS02W+5qS+iE9yq6RYl0asXx5tw0bLhmT5pIfbSquw==
-
-bn.js@^5.1.0:
-  version "5.2.1"
-  resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-5.2.1.tgz#0bc527a6a0d18d0aa8d5b0538ce4a77dccfa7b70"
-  integrity sha512-eXRvHzWyYPBuB4NBy0cmYQjGitUrtqwbvlzP3G6VFnNRbsZQIxQ10PbKKHt8gZ/HW/D/747aDl+QkDqg3KQLMQ==
 
 borsh@^0.4.0:
   version "0.4.0"
@@ -669,11 +645,6 @@ dot-case@^3.0.4:
   dependencies:
     no-case "^3.0.4"
     tslib "^2.0.3"
-
-dotenv@10.0.0:
-  version "10.0.0"
-  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-10.0.0.tgz#3d4227b8fb95f81096cdd2b66653fb2c7085ba81"
-  integrity sha512-rlBi9d8jpv9Sf1klPjNfFAuWDjKLwTIJJ/VxtoTwIR6hnZxcEOQCZg2oIL3MWBYw5GpUDKOEnND7LXTbIpQ03Q==
 
 elliptic@^6.5.4:
   version "6.5.4"
@@ -1176,11 +1147,6 @@ readdirp@~3.6.0:
   integrity sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==
   dependencies:
     picomatch "^2.2.1"
-
-regenerator-runtime@^0.13.11:
-  version "0.13.11"
-  resolved "https://registry.yarnpkg.com/regenerator-runtime/-/regenerator-runtime-0.13.11.tgz#f6dca3e7ceec20590d07ada785636a90cdca17f9"
-  integrity sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==
 
 regenerator-runtime@^0.13.4:
   version "0.13.9"

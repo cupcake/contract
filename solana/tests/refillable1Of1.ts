@@ -6,7 +6,7 @@ import { CupcakeProgram } from '../wip_sdk/cucpakeProgram';
 import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../wip_sdk/programmableAssets';
 import { Bakery } from '../wip_sdk/state/bakery';
 
-describe('`Refillable1Of1` Sprinkle', () => {
+describe('`Refillable1Of1` Sprinkle', async () => {
   const admin = anchor.web3.Keypair.generate();
   const user = anchor.web3.Keypair.generate();
 
@@ -16,7 +16,7 @@ describe('`Refillable1Of1` Sprinkle', () => {
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
   const cupcakeProgramClient = new CupcakeProgram(cupcakeProgram, admin);
 
-  const bakeryPDA = Bakery.PDA(admin.publicKey, cupcakeProgram.programId);
+  const bakeryPDA = await Bakery.PDA(admin.publicKey, cupcakeProgram.programId);
 
   const sprinkleUID = '66554433221155';
   const sprinkleAuthority = anchor.web3.Keypair.generate();

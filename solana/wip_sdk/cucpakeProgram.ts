@@ -1,17 +1,21 @@
 import { Program, BN } from '@project-serum/anchor';
-import { Keypair, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
+  SYSVAR_RENT_PUBKEY,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import { Cupcake } from '../target/types/cupcake';
 import * as TokenAuth from '@metaplex-foundation/mpl-token-auth-rules';
 import * as TokenMetadata from '@metaplex-foundation/mpl-token-metadata';
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  getAssociatedTokenAddressSync,
-} from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { getTokenRecordPDA } from './programmableAssets';
 import { Bakery } from './state/bakery';
 import { Sprinkle } from './state/sprinkle';
 import { UserInfo } from './state/userInfo';
+import { ASSOCIATED_PROGRAM_ID } from '@project-serum/anchor/dist/cjs/utils/token';
 
 export const PDA_PREFIX = 'cupcake';
 
@@ -41,8 +45,14 @@ export class CupcakeProgram {
   constructor(program: Program<Cupcake>, bakeryAuthorityKeypair: Keypair) {
     this.program = program;
     this.bakeryAuthorityKeypair = bakeryAuthorityKeypair;
-    this.bakeryPDA = Bakery.PDA(bakeryAuthorityKeypair.publicKey, program.programId);
   }
+
+  getBakeryPDA = async (): Promise<PublicKey> => {
+    if (!this.bakeryPDA) {
+      this.bakeryPDA = await Bakery.PDA(this.bakeryAuthorityKeypair.publicKey, this.program.programId);
+    }
+    return this.bakeryPDA;
+  };
 
   async createBakery() {
     return this.program.methods
@@ -50,13 +60,22 @@ export class CupcakeProgram {
       .accounts({
         authority: this.bakeryAuthorityKeypair.publicKey,
         payer: this.bakeryAuthorityKeypair.publicKey,
-        config: this.bakeryPDA,
+        config: await this.getBakeryPDA(),
       })
       .signers([this.bakeryAuthorityKeypair])
       .rpc({
         skipPreflight: true,
       });
   }
+
+  getAtaForMint = async (mint: PublicKey, wallet: PublicKey): Promise<PublicKey> => {
+    return (
+      await PublicKey.findProgramAddress(
+        [wallet.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        ASSOCIATED_PROGRAM_ID
+      )
+    )[0];
+  };
 
   async bakeSprinkle(
     sprinkleType: string,
@@ -69,7 +88,7 @@ export class CupcakeProgram {
     const sprinkleUID = new BN(`CC${uid}`, 'hex');
     const sprinklePDA = await Sprinkle.PDA(this.bakeryAuthorityKeypair.publicKey, sprinkleUID, this.program.programId);
 
-    const bakeryTokenATA = getAssociatedTokenAddressSync(tokenMint, this.bakeryAuthorityKeypair.publicKey);
+    const bakeryTokenATA = await this.getAtaForMint(tokenMint, this.bakeryAuthorityKeypair.publicKey);
 
     const metadataPDA = await getMetadataPDA(tokenMint);
     const masterEditionPDA = await getMasterEditionPDA(tokenMint);
@@ -93,7 +112,7 @@ export class CupcakeProgram {
       .accounts({
         authority: this.bakeryAuthorityKeypair.publicKey,
         payer: this.bakeryAuthorityKeypair.publicKey,
-        config: this.bakeryPDA,
+        config: await this.getBakeryPDA(),
         tagAuthority: sprinkleAuthority.publicKey,
         tag: sprinklePDA,
       })
@@ -116,12 +135,62 @@ export class CupcakeProgram {
       .rpc();
   }
 
+  createAssociatedTokenAccountInstruction(
+    associatedTokenAddress: PublicKey,
+    payer: PublicKey,
+    walletAddress: PublicKey,
+    splTokenMintAddress: PublicKey
+  ) {
+    const keys = [
+      {
+        pubkey: payer,
+        isSigner: true,
+        isWritable: true,
+      },
+      {
+        pubkey: associatedTokenAddress,
+        isSigner: false,
+        isWritable: true,
+      },
+      {
+        pubkey: walletAddress,
+        isSigner: false,
+        isWritable: false,
+      },
+      {
+        pubkey: splTokenMintAddress,
+        isSigner: false,
+        isWritable: false,
+      },
+      {
+        pubkey: SystemProgram.programId,
+        isSigner: false,
+        isWritable: false,
+      },
+      {
+        pubkey: TOKEN_PROGRAM_ID,
+        isSigner: false,
+        isWritable: false,
+      },
+      {
+        pubkey: SYSVAR_RENT_PUBKEY,
+        isSigner: false,
+        isWritable: false,
+      },
+    ];
+    return new TransactionInstruction({
+      keys,
+      programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+      data: Buffer.from([]),
+    });
+  }
   async claimSprinkle(uid: string, user: PublicKey, sprinkleAuthorityKeypair: Keypair) {
     const sprinkleUID = new BN(`CC${uid}`, 'hex');
     const sprinklePDA = await Sprinkle.PDA(this.bakeryAuthorityKeypair.publicKey, sprinkleUID, this.program.programId);
     const sprinkleState = await this.program.account.tag.fetch(await sprinklePDA);
-    const token = getAssociatedTokenAddressSync(sprinkleState.tokenMint, this.bakeryAuthorityKeypair.publicKey);
-    const userATA = getAssociatedTokenAddressSync(sprinkleState.tokenMint, user);
+
+    const token = await this.getAtaForMint(sprinkleState.tokenMint, this.bakeryAuthorityKeypair.publicKey);
+    const userATA = await this.getAtaForMint(sprinkleState.tokenMint, user);
     const userInfoPDA = await UserInfo.PDA(
       this.bakeryAuthorityKeypair.publicKey,
       sprinkleUID,
@@ -144,9 +213,8 @@ export class CupcakeProgram {
       .claimTag(0)
       .accounts({
         user,
-        authority: this.bakeryAuthorityKeypair.publicKey,
         payer: this.bakeryAuthorityKeypair.publicKey,
-        config: this.bakeryPDA,
+        config: await this.getBakeryPDA(),
         tagAuthority: sprinkleAuthorityKeypair.publicKey,
         tag: sprinklePDA,
         userInfo: userInfoPDA,
@@ -187,7 +255,7 @@ export class CupcakeProgram {
         { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isWritable: false, isSigner: false },
       ])
       .preInstructions([
-        createAssociatedTokenAccountInstruction(
+        this.createAssociatedTokenAccountInstruction(
           this.bakeryAuthorityKeypair.publicKey,
           userATA,
           user,
