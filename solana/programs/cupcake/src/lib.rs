@@ -36,4 +36,12 @@ pub mod cupcake {
     ) -> Result<()> {
         instructions::claim_sprinkle::handler(ctx, creator_bump)
     }
+
+    /// Modify or create a new listing
+    pub fn modify_listing<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ModifyListing<'info>>,
+        args: ModifyListingArgs,
+    ) -> Result<()> {
+        instructions::modify_listing::handler(ctx, args)
+    }
 }

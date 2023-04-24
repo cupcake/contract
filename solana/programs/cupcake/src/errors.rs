@@ -124,4 +124,10 @@ pub enum ErrorCode {
 
     #[msg("Cannot close listing if token account has a balance greater than zero")]
     ListingTokenHasBalance,
+
+    #[msg("Seller must be token holder")]
+    SellerMustBeLister,
+
+    #[msg("Must hold token to sell")]
+    MustHoldTokenToSell,
 }

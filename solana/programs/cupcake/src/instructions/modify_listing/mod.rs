@@ -39,6 +39,16 @@ pub struct ModifyListing<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    // The hot potato token account of the seller.
+    #[account(
+        seeds=[
+            PDA_PREFIX, 
+            config.authority.as_ref(), 
+            &tag.uid.to_le_bytes(), 
+            listing.seller.key().as_ref(), 
+            tag.token_mint.as_ref()], bump)] 
+    pub seller_token: Account<'info, TokenAccount>,
+
     /// PDA which stores token approvals for a Bakery, and executes the transfer during claims.
     pub config: Box<Account<'info, Config>>,
 
@@ -112,7 +122,8 @@ pub struct ModifyListing<'info> {
     /// does nothing.
     /// CHECK: this is safe
     #[account(mut)] 
-    pub seller_ata: Option<UncheckedAccount<'info>>
+    pub seller_ata: Option<UncheckedAccount<'info>>,
+
 }
 
 
@@ -133,12 +144,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let token_metadata = &ctx.accounts.token_metadata;
         let ata_program = &ctx.accounts.ata_program;
         let seller_ata = &ctx.accounts.seller_ata;
+        let seller_token = &ctx.accounts.seller_token;
         let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
       
 
         if args.next_state == Some(ListingState::Initialized) {
             listing.bump = *ctx.bumps.get("listing").unwrap();
             listing.fee_payer = payer.key();
+            require!(seller_token.owner == payer.key(), ErrorCode::SellerMustBeLister);
+            require!(seller_token.amount > 0, ErrorCode::MustHoldTokenToSell);
         }
 
         // User can only create the listing or cancel it, after that, cupcake must do the rest.
