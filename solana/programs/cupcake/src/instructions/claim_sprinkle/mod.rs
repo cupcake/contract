@@ -510,6 +510,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let ata_program = &ctx.remaining_accounts[9];
             let token_metadata = &ctx.remaining_accounts[10];
 
+            // Not required for other modes but is for this one.
+            require!(user.is_signer, ErrorCode::UserMustSign);
+
             assert_derivation(
                 &mpl_token_metadata::id(),
                 &token_metadata.to_account_info(),
@@ -596,6 +599,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 current_authority: config.to_account_info(),
                 account_or_mint: user_token_account.clone(),
             };
+
             let context =
                 CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
             token::set_authority(
@@ -603,7 +607,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 spl_token::instruction::AuthorityType::AccountOwner,
                 Some(user.key()),
             )?;
-
+           
             // Set the new ATA's close authority to the BakeryPDA.
             let cpi_accounts = token::SetAuthority {
                 current_authority: user.to_account_info(),

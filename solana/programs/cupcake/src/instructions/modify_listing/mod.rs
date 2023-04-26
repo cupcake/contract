@@ -39,13 +39,17 @@ pub struct ModifyListing<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    /// The seller.
+    /// CHECK: No check.
+    pub seller: UncheckedAccount<'info>,
+
     // The hot potato token account of the seller.
     #[account(
         seeds=[
             PDA_PREFIX, 
             config.authority.as_ref(), 
-            &tag.uid.to_le_bytes(), 
-            listing.seller.key().as_ref(), 
+            &tag.uid.to_le_bytes(),
+            seller.key().as_ref(), 
             tag.token_mint.as_ref()], bump)] 
     pub seller_token: Account<'info, TokenAccount>,
 
@@ -71,6 +75,7 @@ pub struct ModifyListing<'info> {
                   LISTING
               ], 
               space = Listing::SIZE,
+              constraint=listing.state == ListingState::Initialized || listing.seller == seller.key(),
               payer=payer,
               bump)]
     pub listing: Box<Account<'info, Listing>>,
@@ -135,6 +140,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let tag = &mut ctx.accounts.tag;
         let config = &ctx.accounts.config;
         let payer = &ctx.accounts.payer;
+        let seller = &ctx.accounts.seller;
         let listing = &mut ctx.accounts.listing;
         let system_program = &ctx.accounts.system_program;
         let rent = &ctx.accounts.rent;
@@ -147,10 +153,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let seller_token = &ctx.accounts.seller_token;
         let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
       
-
+ 
         if args.next_state == Some(ListingState::Initialized) {
             listing.bump = *ctx.bumps.get("listing").unwrap();
             listing.fee_payer = payer.key();
+            listing.seller = seller.key();
             require!(seller_token.owner == payer.key(), ErrorCode::SellerMustBeLister);
             require!(seller_token.amount > 0, ErrorCode::MustHoldTokenToSell);
         }

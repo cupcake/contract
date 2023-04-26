@@ -130,4 +130,7 @@ pub enum ErrorCode {
 
     #[msg("Must hold token to sell")]
     MustHoldTokenToSell,
+
+    #[msg("User must be a signer to use hot potato mode")]
+    UserMustSign,
 }
