@@ -44,4 +44,19 @@ pub mod cupcake {
     ) -> Result<()> {
         instructions::modify_listing::handler(ctx, args)
     }
+
+    /// Create a new offer
+    pub fn make_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, MakeOffer<'info>>,
+        args: MakeOfferArgs,
+    ) -> Result<()> {
+        instructions::make_offer::handler(ctx, args)
+    }
+
+    /// Accept an new offer
+    pub fn accept_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
+    ) -> Result<()> {
+        instructions::accept_offer::handler(ctx)
+    }
 }

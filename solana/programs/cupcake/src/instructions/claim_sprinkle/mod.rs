@@ -13,7 +13,7 @@ use mpl_token_metadata::instruction::{
 use mpl_token_metadata::processor::AuthorizationData;
 use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState};
+use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
@@ -671,6 +671,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 let listing: Account<Listing> = Account::try_from(&listing_data)?;
 
                 let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
+                let listing_token_seed_no_bumps = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..]];
+                let (_, bump) = Pubkey::find_program_address(listing_token_seed_no_bumps, ctx.program_id);
+                let listing_token_seeds =  &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[bump]];
 
                 // Okay, you have right listing - ensure you aren't trying to potato swap during an incorrect state
 
@@ -686,12 +689,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 if listing.state == ListingState::Shipped {
                     let rent = ctx.accounts.rent.to_account_info();
                     empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
-                        remaining_accounts: ctx.remaining_accounts,
+                        remaining_accounts: &ctx.remaining_accounts[11..],
                         config,
                         tag,
-                        listing_data,
                         listing: &listing,
                         listing_token_account,
+                        listing_token_seeds,
                         listing_seeds,
                         token_metadata,
                         payer,

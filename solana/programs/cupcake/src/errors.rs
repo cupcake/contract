@@ -89,12 +89,6 @@ pub enum ErrorCode {
     #[msg("No buyer token account present")]
     NoBuyerTokenPresent,
 
-    #[msg("No listing token account present")]
-    NoListingTokenPresent,
-
-    #[msg("No offer token account present")]
-    NoOfferTokenPresent,
-
     #[msg("No buyer present")]
     NoBuyerPresent,
 
@@ -133,4 +127,19 @@ pub enum ErrorCode {
 
     #[msg("User must be a signer to use hot potato mode")]
     UserMustSign,
+
+    #[msg("Need agreed price to goto scanned")]
+    NeedAgreedPrice,
+
+    #[msg("Need chosen buyer")]
+    NeedBuyer,
+
+    #[msg("Seller must initiate the listing")]
+    SellerMustInitiateSale,
+
+    #[msg("Listing not for sale")]
+    ListingNotForSale,
+
+    #[msg("Must bid at least 0.001 SOL")]
+    MinimumOffer,
 }

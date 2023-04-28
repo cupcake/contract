@@ -46,8 +46,7 @@ pub struct DeleteListing<'info> {
     /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
 
-    /// Will be initialized only if needed, we dont do typing here because
-    /// we really dont know if this is needed at all until logic fires.
+    /// Will be either a SOL account or SPL account depending on price mint
     /// CHECK:  this is safe
     #[account(mut, seeds=[
         PDA_PREFIX, 
@@ -57,7 +56,7 @@ pub struct DeleteListing<'info> {
         TOKEN
     ],
     bump)]
-    pub listing_token: Option<UncheckedAccount<'info>>,
+    pub listing_token: UncheckedAccount<'info>,
 
     /// Mint of type of money you want to be accepted for this listing
     pub price_mint: Option<Account<'info, Mint>>,
@@ -83,8 +82,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         listing.state == ListingState::Scanned, ErrorCode::CannotDeleteListingInThisState);
 
     if listing.price_mint.is_some() {
-        require!(listing_token.is_some(), ErrorCode::NoListingTokenPresent);
-        let lt = listing_token.clone().unwrap();
+        let lt = listing_token;
         // close the listing token if needed
         if !lt.data_is_empty() {
             let buf: &mut &[u8] = &mut &lt.data.try_borrow_mut().unwrap()[..];

@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token};
-use crate::errors::ErrorCode;
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, Offer, TOKEN, OFFER};
 use crate::state::{bakery::*, sprinkle::*};
 
@@ -59,7 +58,8 @@ pub struct AcceptOffer<'info> {
     /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
 
-    /// Needed if this is a price mint and not sol 
+    /// Is a SOL account if sol, is a token account if price mint set
+    /// CHECK: this is safe
     #[account(mut, 
         seeds=[
             PDA_PREFIX, 
@@ -68,9 +68,8 @@ pub struct AcceptOffer<'info> {
             LISTING,
             TOKEN
         ], bump)]
-    pub listing_token: Option<UncheckedAccount<'info>>,
+    pub listing_token: UncheckedAccount<'info>,
 
-    /// Needed if this is a price mint and not sol
     /// CHECK:  this is safe
     #[account(mut, 
         seeds=[
@@ -82,7 +81,7 @@ pub struct AcceptOffer<'info> {
             buyer.key().as_ref(),
             TOKEN
         ], bump)]
-    pub offer_token: Option<UncheckedAccount<'info>>,
+    pub offer_token: UncheckedAccount<'info>,
 }
 
 
@@ -108,16 +107,25 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[offer.bump]
     ];
 
+    let offer_token_seeds = &[
+        PDA_PREFIX, 
+        authority.as_ref(), 
+        &tag.uid.to_le_bytes(),
+        LISTING,
+        OFFER,
+        buyer_key.as_ref(),
+        TOKEN,
+        &[*ctx.bumps.get("offer_token").unwrap()]
+    ];
+
     listing.agreed_price = Some(offer.offer_amount);
+    listing.chosen_buyer = Some(offer.buyer);
     listing.state = ListingState::Accepted;
     
     if listing.price_mint.is_some() {
-        require!(ctx.accounts.offer_token.is_some(), ErrorCode::NoOfferTokenPresent);
-        require!(ctx.accounts.listing_token.is_some(), ErrorCode::NoListingTokenPresent);
-
         let cpi_accounts = token::Transfer {
-            from: ctx.accounts.offer_token.clone().unwrap().to_account_info(),
-            to: ctx.accounts.listing_token.clone().unwrap().to_account_info(),
+            from: ctx.accounts.offer_token.to_account_info(),
+            to: ctx.accounts.listing_token.to_account_info(),
             authority: offer.to_account_info(),
         };
         let context =
@@ -125,7 +133,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         token::transfer(context.with_signer(&[&offer_seeds[..]]), offer.offer_amount)?;
 
         let cpi_accounts = token::CloseAccount {
-            account: ctx.accounts.offer_token.clone().unwrap().to_account_info(),
+            account: ctx.accounts.offer_token.to_account_info(),
             destination: original_fee_payer.to_account_info(),
             authority: offer.to_account_info(),
         };
@@ -134,17 +142,18 @@ pub fn handler<'a, 'b, 'c, 'info>(
         token::close_account(context.with_signer(&[&offer_seeds[..]]))?;
     } else {
         let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &offer.key(),
-            &listing.key(),
+            &ctx.accounts.offer_token.key(),
+            &ctx.accounts.listing_token.key(),
             offer.offer_amount,
         );
 
-        anchor_lang::solana_program::program::invoke(
+        anchor_lang::solana_program::program::invoke_signed(
             &ix,
             &[
-                offer.to_account_info(),
-                listing.to_account_info(),
+                ctx.accounts.offer_token.to_account_info(),
+                ctx.accounts.listing_token.to_account_info(),
             ],
+            &[offer_token_seeds]
         )?;
     }
 

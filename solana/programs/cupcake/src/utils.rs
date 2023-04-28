@@ -5,8 +5,8 @@ use crate::{
 use anchor_lang::{
     error,
     prelude::{
-        next_account_info, Account, AccountInfo, CpiContext, Program, Pubkey, Rent, Result, System,
-        Sysvar, UncheckedAccount,
+        next_account_info, Account, AccountInfo, CpiContext, Program, Pubkey, Rent, Result,
+        SolanaSysvar, System, Sysvar, UncheckedAccount,
     },
     require,
     solana_program::{
@@ -29,7 +29,7 @@ use std::{convert::TryInto, slice::Iter, str::FromStr};
 // Out of 10000, we take 0.5% of every sale.
 pub const OUR_FEES: u16 = 50;
 // Placeholder
-pub const OUR_ADDRESS: &str = "pitH4RCXUxeS48F9wqk4qTEBDDZtvWhyU6V3WK9ULoM";
+pub const OUR_ADDRESS: &str = "B3JML1kMs1dRTTEWKqP5uwoTzaKAjA3gVMUFf1vTRk2U";
 
 /// Checks if two PublicKeys are equal.
 pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> Result<()> {
@@ -385,6 +385,7 @@ pub fn pay_creator<'a>(
 ) -> Result<()> {
     let current_creator_info = next_account_info(remaining_accounts)?;
     assert_keys_equal(creator.address, *current_creator_info.key)?;
+
     if !is_native {
         let current_creator_token_account_info = next_account_info(remaining_accounts)?;
         if current_creator_token_account_info.data_is_empty() {
@@ -426,6 +427,10 @@ pub fn pay_creator<'a>(
             )?;
         }
     } else if creator_fee > 0 {
+        let new_lamps = current_creator_info
+            .lamports()
+            .checked_add(creator_fee)
+            .ok_or(ErrorCode::NumericalOverflow)?;
         invoke_signed(
             &system_instruction::transfer(
                 &escrow_payment_account.key,
@@ -439,6 +444,21 @@ pub fn pay_creator<'a>(
             ],
             &[signer_seeds],
         )?;
+        // If not enough, we may need to top up account to get to rent free zone.
+        let rent = Rent::get()?.minimum_balance(0);
+        if new_lamps < rent {
+            let diff = rent
+                .checked_sub(new_lamps)
+                .ok_or(ErrorCode::NumericalOverflow)?;
+            invoke(
+                &system_instruction::transfer(&fee_payer.key, current_creator_info.key, diff),
+                &[
+                    fee_payer.clone(),
+                    current_creator_info.clone(),
+                    system_program.clone(),
+                ],
+            )?;
+        }
     }
 
     Ok(())
@@ -448,9 +468,9 @@ pub struct EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
     pub remaining_accounts: &'c [AccountInfo<'info>],
     pub config: &'b Account<'info, Config>,
     pub tag: &'b Account<'info, Tag>,
-    pub listing_data: &'c AccountInfo<'info>,
     pub listing: &'d Account<'info, Listing>,
     pub listing_token_account: &'c AccountInfo<'info>,
+    pub listing_token_seeds: &'d [&'d [u8]],
     pub listing_seeds: &'d [&'d [u8]],
     pub token_metadata: &'c AccountInfo<'info>,
     pub payer: &'b AccountInfo<'info>,
@@ -471,7 +491,6 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         tag,
         remaining_accounts,
         listing,
-        listing_data,
         listing_token_account,
         listing_seeds,
         token_metadata,
@@ -483,12 +502,13 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         rent,
         program_id,
         seller_ata,
+        listing_token_seeds,
     } = args;
     if let Some(mint) = listing.price_mint {
         assert_keys_equal(price_mint.key(), mint)?;
 
         let listing_price_sans_royalties = pay_creator_fees(
-            &mut remaining_accounts[11..].into_iter(),
+            &mut remaining_accounts.into_iter(),
             token_metadata,
             listing_token_account,
             &listing.to_account_info(),
@@ -538,9 +558,9 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         token::close_account(context.with_signer(&[&listing_seeds[..]]))?;
     } else {
         let listing_price_sans_royalties = pay_creator_fees(
-            &mut remaining_accounts[11..].into_iter(),
+            &mut remaining_accounts.into_iter(),
             token_metadata,
-            &listing.to_account_info(),
+            &listing_token_account.to_account_info(),
             &listing.to_account_info(),
             payer,
             price_mint,
@@ -548,26 +568,27 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
             &token_program,
             &system_program,
             &rent.to_account_info(),
-            listing_seeds,
+            listing_token_seeds,
             &[],
             listing.agreed_price.unwrap(),
             true,
         )?;
-
         assert_keys_equal(listing.seller, seller_ata.key())?;
+        // remaining lamports go to seller.
 
         let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &listing.key(),
+            &listing_token_account.key(),
             &listing.seller,
             listing_price_sans_royalties,
         );
-        anchor_lang::solana_program::program::invoke(
+        anchor_lang::solana_program::program::invoke_signed(
             &ix,
             &[
-                listing_data.to_account_info(),
+                listing_token_account.to_account_info(),
                 // Not actually an ata in this case, is just the seller's account
                 seller_ata.to_account_info(),
             ],
+            &[listing_token_seeds],
         )?;
     }
 

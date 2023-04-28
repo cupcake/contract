@@ -60,7 +60,6 @@ pub struct CancelOffer<'info> {
     /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
 
-    /// Needed if this is a price mint and not sol
     /// CHECK:  this is safe
     #[account(mut, 
         seeds=[
@@ -72,7 +71,7 @@ pub struct CancelOffer<'info> {
             buyer.key().as_ref(),
             TOKEN
         ], bump)]
-    pub offer_token: Option<UncheckedAccount<'info>>,
+    pub offer_token: UncheckedAccount<'info>,
 
     /// Buyer's token account, if they are using a token to pay for this listing
     #[account(mut)]
@@ -115,7 +114,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     if let Some(mint) = listing.price_mint {
         require!(buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
-        require!(offer_token.is_some(), ErrorCode::NoOfferTokenPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 
         let buyer_token_acct = buyer_token.clone().unwrap();
@@ -126,7 +124,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             None)?;
 
         let cpi_accounts = token::Transfer {
-            from: offer_token.clone().unwrap().to_account_info(),
+            from: offer_token.to_account_info(),
             to: buyer_token_acct.to_account_info(),
             authority: offer.to_account_info(),
         };

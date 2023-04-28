@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Mint};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, Offer, TOKEN, OFFER};
+use crate::state::{PDA_PREFIX, LISTING, Listing, Offer, TOKEN, OFFER, ListingState};
 use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{
     assert_is_ata,
@@ -65,7 +65,8 @@ pub struct MakeOffer<'info> {
     /// SPL Rent Sysvar, required for account allocation.
     pub rent: Sysvar<'info, Rent>,
 
-    /// Needed if this is a price mint and not sol
+    /// Either the token account or the SOL account
+    /// CHECK: this is safe
     #[account(mut, 
         seeds=[
             PDA_PREFIX, 
@@ -76,7 +77,7 @@ pub struct MakeOffer<'info> {
             buyer.key().as_ref(),
             TOKEN
         ], bump)]
-    pub offer_token: Option<UncheckedAccount<'info>>,
+    pub offer_token: UncheckedAccount<'info>,
 
     /// Buyer's token account, if they are using a token to pay for this listing
     #[account(mut)]
@@ -95,16 +96,16 @@ pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, MakeOffer<'info>>,
     args: MakeOfferArgs
   ) -> Result<()> {   
-    let config = &mut ctx.accounts.config;
-    let tag = &mut ctx.accounts.tag;
+    let config = &ctx.accounts.config;
+    let tag = &ctx.accounts.tag;
     let listing = &mut ctx.accounts.listing;
     let offer_token = &ctx.accounts.offer_token;
     let buyer_token = &ctx.accounts.buyer_token;
     let offer = &mut ctx.accounts.offer;
-    let transfer_authority = &mut ctx.accounts.transfer_authority;
-    let system_program = &mut ctx.accounts.system_program;
-    let rent = &mut ctx.accounts.rent;
-    let token_program = &mut ctx.accounts.token_program;
+    let transfer_authority = &ctx.accounts.transfer_authority;
+    let system_program = &ctx.accounts.system_program;
+    let rent = &ctx.accounts.rent;
+    let token_program = &ctx.accounts.token_program;
     let payer = &mut ctx.accounts.payer;
     let price_mint = &ctx.accounts.price_mint;
     let buyer = &ctx.accounts.buyer;
@@ -120,6 +121,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[offer.bump]
     ];
 
+    require!(listing.price_mint.is_some() || args.offer_amount >= 1000000, ErrorCode::MinimumOffer);
+    require!(listing.state == ListingState::ForSale, ErrorCode::ListingNotForSale);
+
     offer.bump = *ctx.bumps.get("offer").unwrap();
 
     offer.buyer = *buyer.key;
@@ -134,7 +138,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     if let Some(mint) = listing.price_mint {
         require!(buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
-        require!(offer_token.is_some(), ErrorCode::NoOfferTokenPresent);
         require!(transfer_authority.is_some(), ErrorCode::NoTransferAuthorityPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 
@@ -146,7 +149,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             None)?;
 
         create_program_token_account_if_not_present(
-            &offer_token.clone().unwrap(),
+            &offer_token,
             system_program,
             payer,
             token_program,
@@ -158,7 +161,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
         let cpi_accounts = token::Transfer {
             from: buyer_token_acct.to_account_info(),
-            to: offer_token.clone().unwrap().to_account_info(),
+            to: offer_token.to_account_info(),
             authority: transfer_authority.clone().unwrap().to_account_info(),
         };
         let context =
@@ -167,7 +170,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     } else {
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &buyer.key(),
-            &offer.key(),
+            &offer_token.key(),
             args.offer_amount,
         );
 
@@ -175,8 +178,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
             &ix,
             &[
                 buyer.to_account_info(),
-                offer.to_account_info(),
+                offer_token.to_account_info(),
             ],
+            
         )?;
     }
     Ok(())

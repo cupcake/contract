@@ -1,5 +1,5 @@
 [features]
-seeds = true
+seeds = false
 
 [programs.localnet]
 cupcake = "cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE"

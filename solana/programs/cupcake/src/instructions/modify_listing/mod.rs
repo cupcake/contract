@@ -36,7 +36,7 @@ pub struct ModifyListingArgs {
 #[derive(Accounts)]
 pub struct ModifyListing<'info> {
     /// Account which pays the network and rent fees, for this transaction only.
-    #[account(mut)]
+    #[account(mut, constraint=payer.key() == config.authority || payer.key() == seller.key())]
     pub payer: Signer<'info>,
 
     /// The seller.
@@ -89,8 +89,7 @@ pub struct ModifyListing<'info> {
     /// SPL Rent Sysvar, required for account allocation.
     pub rent: Sysvar<'info, Rent>,
 
-    /// Will be initialized only if needed, we dont do typing here because
-    /// we really dont know if this is needed at all until logic fires.
+    /// Is a SOL account if using SOL, and a token account if using a price mint
     /// CHECK: this is safe
     #[account(mut, seeds=[
         PDA_PREFIX, 
@@ -100,7 +99,7 @@ pub struct ModifyListing<'info> {
         TOKEN
     ],
     bump)]
-    pub listing_token: Option<UncheckedAccount<'info>>,
+    pub listing_token: UncheckedAccount<'info>,
 
     /// Mint of type of money you want to be accepted for this listing
     pub price_mint: Option<Account<'info, Mint>>,
@@ -152,16 +151,20 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let seller_ata = &ctx.accounts.seller_ata;
         let seller_token = &ctx.accounts.seller_token;
         let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
-      
- 
+        let listing_token_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[*ctx.bumps.get("listing_token").unwrap()]];
+
+        // tested
         if args.next_state == Some(ListingState::Initialized) {
             listing.bump = *ctx.bumps.get("listing").unwrap();
             listing.fee_payer = payer.key();
             listing.seller = seller.key();
-            require!(seller_token.owner == payer.key(), ErrorCode::SellerMustBeLister);
+            // Redundant check but just in case.
+            require!(seller_token.owner == seller.key(), ErrorCode::SellerMustBeLister);
             require!(seller_token.amount > 0, ErrorCode::MustHoldTokenToSell);
+            require!(payer.key() == seller.key(), ErrorCode::SellerMustInitiateSale);
         }
 
+        // tested
         // User can only create the listing or cancel it, after that, cupcake must do the rest.
         if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) && args.next_state != Some(ListingState::UserCanceled) {
             return Err(ErrorCode::MustUseConfigAsPayer.into());
@@ -180,10 +183,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
         // Scanned / Returned is a frozen endpoint, cannot move from here.
         require!(listing.state != ListingState::Scanned && listing.state != ListingState::Returned, ErrorCode::ListingFrozen);
 
+        // tested
         // To move into the accepted state, please use the accept offer instruction as seller,
         // or as buyer, make bid that is above or at asking price.
         require!(args.next_state != Some(ListingState::Accepted), ErrorCode::CannotAcceptFromModify);
-
 
         if let Some(settings) = args.price_settings {
             // Can only change the price mint or price during initialized/received.
@@ -198,18 +201,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 listing.set_price = settings.set_price;
 
                 if listing.price_mint.is_some() {
-                    let listing_token_unwrapped = match listing_token {
-                        Some(lt) => lt,
-                        None => return Err(ErrorCode::MustSendUpListingTokenAccount.into())
-                    };
-
                     let price_mint_unwrapped = match price_mint {
                         Some(mint) => mint,
                         None => return Err(ErrorCode::MustSendUpPriceMint.into())
                     };
                     
                     create_program_token_account_if_not_present(
-                        listing_token_unwrapped,
+                        listing_token,
                         system_program,
                         payer,
                         token_program,
@@ -244,7 +242,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 if let Some(buyer) = listing.chosen_buyer {
                     if let Some(price_mint) = listing.price_mint {
                         require!(ctx.accounts.buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
-                        require!(ctx.accounts.listing_token.is_some(), ErrorCode::NoListingTokenPresent);
 
                         let buyer_token_acct = ctx.accounts.buyer_token.clone().unwrap();
                         assert_is_ata(
@@ -254,7 +251,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                             None)?;
 
                         let cpi_accounts = token::Transfer {
-                            from: ctx.accounts.listing_token.clone().unwrap().to_account_info(),
+                            from: ctx.accounts.listing_token.to_account_info(),
                             to: buyer_token_acct.to_account_info(),
                             authority: listing.to_account_info(),
                         };
@@ -263,20 +260,16 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.agreed_price.unwrap())?;
                     } else { 
                         require!(ctx.accounts.buyer.is_some(), ErrorCode::NoBuyerPresent);
-
-                        let amount_in_residence = listing.to_account_info().lamports().
-                            checked_sub(Rent::get()?.minimum_balance(Listing::SIZE)).
-                            ok_or(ErrorCode::NumericalOverflowError)?;
-
+                        
                         let ix = anchor_lang::solana_program::system_instruction::transfer(
-                            &listing.key(),
+                            &listing_token.key(),
                             &buyer,
-                            amount_in_residence,
+                            listing_token.to_account_info().lamports(),
                         );
                         anchor_lang::solana_program::program::invoke(
                             &ix,
                             &[
-                                listing.to_account_info(),
+                                listing_token.to_account_info(),
                                 ctx.accounts.buyer.clone().unwrap().to_account_info(),
                             ],
                         )?;
@@ -288,14 +281,19 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 // Can force an escrow empty and go to scanned if we feel the package arrived.
 
                 require!(ctx.accounts.token_metadata.is_some(), ErrorCode::NoTokenMetadataPresent);
-                require!(ctx.accounts.price_mint.is_some(), ErrorCode::NoPriceMintPresent);
+                require!(listing.price_mint.is_none() || ctx.accounts.price_mint.is_some(), ErrorCode::NoPriceMintPresent);
                 require!(ctx.accounts.ata_program.is_some(), ErrorCode::NoAtaProgramPresent);
-                require!(ctx.accounts.listing_token.is_some(), ErrorCode::NoListingTokenPresent);
                 require!(ctx.accounts.seller_ata.is_some(), ErrorCode::NoSellerAtaPresent);
+                require!(listing.agreed_price.is_some(), ErrorCode::NeedAgreedPrice);
+                require!(listing.chosen_buyer.is_some(), ErrorCode::NeedBuyer);
 
                 let tm = token_metadata.clone().unwrap().to_account_info();
-                let pm = price_mint.clone().unwrap().to_account_info();
-                let lm = listing_token.clone().unwrap().to_account_info();
+                let pm = if listing.price_mint.is_none() { 
+                    system_program.to_account_info() 
+                } else { 
+                    price_mint.clone().unwrap().to_account_info() 
+                };
+                let lm = listing_token.to_account_info();
                 let seller = seller_ata.clone().unwrap().to_account_info();
                 let ap = ata_program.clone().unwrap().to_account_info();
                 let rent = ctx.accounts.rent.to_account_info();
@@ -311,15 +309,14 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         tag.token_mint.as_ref(),
                     ],
                 )?;
-
                 empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
                     remaining_accounts: ctx.remaining_accounts,
                     config,
                     tag,
-                    listing_data: &listing.to_account_info(),
                     listing: &listing,
                     listing_token_account: &lm,
                     listing_seeds,
+                    listing_token_seeds,
                     token_metadata: &tm,
                     payer: &payer,
                     price_mint: &pm,
