@@ -1,6 +1,6 @@
 import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
-import { LAMPORTS_PER_SOL, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { Cupcake } from '../../target/types/cupcake';
 import { expect } from 'chai';
 import { SolanaClient } from '../../site/cupcake-data/clients/solana/SolanaClient';
@@ -182,6 +182,106 @@ describe('Modify Listing Endpoint', async () => {
       expect(listing.priceMint).to.be.null;
       expect(listing.setPrice).to.be.null;
       expect(listing.agreedPrice).to.be.null;
+    });
+
+    it('User can set a price and change it once in for sale but cant set price mint in forSale', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: new anchor.BN(10000000),
+          },
+          collection: null,
+          nextState: { initialized: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      let listing = await cupcakeProgram.account.listing.fetch(listingKey);
+
+      expect(listing.seller.toBase58()).to.equal(user.publicKey.toBase58());
+      expect(listing.feePayer.toBase58()).to.equal(user.publicKey.toBase58());
+      expect(listing.chosenBuyer).to.be.null;
+      expect(listing.state.initialized).to.deep.equal({});
+      expect(listing.priceMint).to.be.null;
+      expect(listing.setPrice.toNumber()).to.equal(10000000);
+      expect(listing.agreedPrice).to.be.null;
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: null,
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: new anchor.BN(20000000),
+          },
+          collection: null,
+          nextState: null,
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      listing = await cupcakeProgram.account.listing.fetch(listingKey);
+
+      expect(listing.state.forSale).to.deep.equal({});
+      expect(listing.setPrice.toNumber()).to.equal(20000000);
+
+      try {
+        modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          user.publicKey,
+          user.publicKey,
+          {
+            priceSettings: {
+              priceMint: nftMint, // just reusing a mint because it expects one
+              setPrice: null,
+            },
+            collection: null,
+            nextState: null,
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+
+        let tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([user]);
+        await cupcakeProgram.provider.connection.sendTransaction(tx);
+        // We should never get here
+        throw new Error('This logic should have failed and it didnt');
+      } catch (e) {
+        expect(e.message).to.match(new RegExp('0x178a')); // CannotAcceptFromModify
+      }
     });
 
     it('can be marked as received', async () => {
@@ -373,7 +473,121 @@ describe('Modify Listing Endpoint', async () => {
       }
     });
 
-    it('cant be moved out of scanned', async () => {
+    it('cant be moved out of scanned and force-scanning pays the seller', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { initialized: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      console.log('Buyer', buyer.publicKey.toBase58());
+      let makeOffer = await SolanaClient.runMakeOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        offerAmount: new anchor.BN(1000000),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(makeOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      let acceptOffer = await SolanaClient.runAcceptOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        signer: user.publicKey,
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(acceptOffer);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      let oldSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: null,
+          collection: null,
+          nextState: { scanned: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+      let newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+
+      expect(newSellerLamports - oldSellerLamports).to.equal(995000);
+
+      try {
+        modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          admin.publicKey,
+          user.publicKey,
+          {
+            priceSettings: null,
+            collection: null,
+            nextState: { forSale: true },
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([admin]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+        // We should never get here
+        throw new Error('This logic should have failed and it didnt');
+      } catch (e) {
+        expect(e.message).to.match(/0x1788/); //ListingFrozen
+      }
+    });
+
+    it('cancelling in shipped is not possible for the user beeen', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -450,7 +664,7 @@ describe('Modify Listing Endpoint', async () => {
         {
           priceSettings: null,
           collection: null,
-          nextState: { scanned: true },
+          nextState: { shipped: true },
         },
         cupcakeProgram.provider.connection.rpcEndpoint
       );
@@ -463,23 +677,23 @@ describe('Modify Listing Endpoint', async () => {
         modifyListing = await SolanaClient.runModifyListingTxn(
           admin.publicKey,
           nftMint,
-          admin.publicKey,
+          user.publicKey,
           user.publicKey,
           {
             priceSettings: null,
             collection: null,
-            nextState: { forSale: true },
+            nextState: { userCanceled: true },
           },
           cupcakeProgram.provider.connection.rpcEndpoint
         );
         tx = VersionedTransaction.deserialize(modifyListing);
-        tx.sign([admin]);
+        tx.sign([user]);
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
         // We should never get here
         throw new Error('This logic should have failed and it didnt');
       } catch (e) {
-        expect(e.message).to.match(/0x1788/); //ListingFrozen
+        expect(e.message).to.match(/0x177c/); //ListingFrozen
       }
     });
   });

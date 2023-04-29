@@ -164,22 +164,29 @@ pub fn handler<'a, 'b, 'c, 'info>(
             require!(payer.key() == seller.key(), ErrorCode::SellerMustInitiateSale);
         }
 
-        // tested
-        // User can only create the listing or cancel it, after that, cupcake must do the rest.
-        if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) && args.next_state != Some(ListingState::UserCanceled) {
-            return Err(ErrorCode::MustUseConfigAsPayer.into());
-        }
-
-        if payer.key() != config.authority && listing.state != ListingState::Initialized {
-            // If the user is trying to do something outside of the initialized state, 
-            // then if they are trying to do something other than cancel, or they are doing it while
-            // in the shipped state, blow up. We dont want them cancelling a shipped order,
-            // and we dont want them doing any other thing than cancelling.
-            if args.next_state != Some(ListingState::UserCanceled) || listing.state == ListingState::Shipped {
+        // If there is an agreed price, or we are trying to move states, we need to check on whether
+        // you are user or cupcake. Otherwise, you can only just betrying to change price
+        // or collection, and that's pretty much fine.
+        if listing.agreed_price.is_some() || args.next_state.is_some() {
+            // tested
+            // User can only create the listing or cancel it, after that, cupcake must do the rest.
+            if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) && args.next_state != Some(ListingState::UserCanceled) {
                 return Err(ErrorCode::MustUseConfigAsPayer.into());
             }
+
+            if payer.key() != config.authority && listing.state != ListingState::Initialized {
+                // If the user is trying to do something outside of the initialized state, 
+                // then if they are trying to do something other than cancel, or they are doing it while
+                // in the shipped state, blow up. We dont want them cancelling a shipped order,
+                // and we dont want them doing any other thing than cancelling.
+                if args.next_state != Some(ListingState::UserCanceled) || listing.state == ListingState::Shipped {
+                    return Err(ErrorCode::MustUseConfigAsPayer.into());
+                }
+            }
+
         }
 
+        // tested
         // Scanned / Returned is a frozen endpoint, cannot move from here.
         require!(listing.state != ListingState::Scanned && listing.state != ListingState::Returned, ErrorCode::ListingFrozen);
 
@@ -220,7 +227,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             } else if listing.state == ListingState::ForSale {
                 // Regardless of what state you are transitioning to, if you are in ForSale, you can only change the price, for simplicity. We could detect
                 // if you were going back to initialized or received and then allow for mint changes but let's not be greedy.
-
+                //tested
                 listing.set_price = settings.set_price;
                 
                 require!(listing.price_mint == settings.price_mint, ErrorCode::CannotChangePriceMintInThisState);
@@ -278,6 +285,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 
                 listing.chosen_buyer = None;
             } else if next_state == ListingState::Scanned {
+                // tested (with sol only)
+
                 // Can force an escrow empty and go to scanned if we feel the package arrived.
 
                 require!(ctx.accounts.token_metadata.is_some(), ErrorCode::NoTokenMetadataPresent);
