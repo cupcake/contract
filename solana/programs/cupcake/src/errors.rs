@@ -142,4 +142,7 @@ pub enum ErrorCode {
 
     #[msg("Must bid at least 0.001 SOL")]
     MinimumOffer,
+
+    #[msg("Must use seller as payer")]
+    MustUseSellerAsPayer,
 }

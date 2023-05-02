@@ -9,6 +9,10 @@ import { BakeSprinkleArgs, tagTypeSchema, tagTypeToNumber } from '../../site/cup
 
 import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../../wip_sdk/programmableAssets';
 import { Bakery } from '../../wip_sdk/state/bakery';
+import { createMint } from '@solana/spl-token';
+import { createAssociatedTokenAccount } from '@solana/spl-token';
+import { mintTo } from '@solana/spl-token';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 const characters = '0123456789';
 
 function generateString(length) {
@@ -25,21 +29,15 @@ describe('Modify Listing Endpoint', async () => {
   const admin = anchor.web3.Keypair.generate();
   const user = anchor.web3.Keypair.generate();
   const buyer = anchor.web3.Keypair.generate();
+  const secondCreator = anchor.web3.Keypair.generate();
 
-  let sprinkleUID, listingKey;
+  let sprinkleUID, listingKey, sprinkleKeypair;
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
   SolanaClient.setCupcakeProgram(admin, cupcakeProgram);
   SolanaClient.setCupcakeProgram(buyer, cupcakeProgram);
   SolanaClient.setCupcakeProgram(user, cupcakeProgram);
 
-  const cupcakeProgramClient = await SolanaClient.getCupcakeProgram(
-    admin,
-    cupcakeProgram.provider.connection.rpcEndpoint
-  );
-
   let nftMint;
-
-  const bakeryPDA = await Bakery.PDA(admin.publicKey, cupcakeProgram.programId);
 
   before(async () => {
     let sig = await cupcakeProgram.provider.connection.requestAirdrop(admin.publicKey, LAMPORTS_PER_SOL * 10);
@@ -65,7 +63,7 @@ describe('Modify Listing Endpoint', async () => {
       sprinkleUID = generateString(10);
       listingKey = (await SolanaClient.getListingPDA(admin.publicKey, bnUid(sprinkleUID)))[0];
 
-      const sprinkleKeypair = anchor.web3.Keypair.generate();
+      sprinkleKeypair = anchor.web3.Keypair.generate();
       nftMint = await mintNFT(cupcakeProgram.provider, admin, admin.publicKey, 0);
       const args: BakeSprinkleArgs = {
         sprinkleUid: sprinkleUID,
@@ -115,8 +113,9 @@ describe('Modify Listing Endpoint', async () => {
       sprinkleUID = generateString(10);
       listingKey = (await SolanaClient.getListingPDA(admin.publicKey, bnUid(sprinkleUID)))[0];
 
-      const sprinkleKeypair = anchor.web3.Keypair.generate();
-      nftMint = await mintNFT(cupcakeProgram.provider, admin, admin.publicKey, 0);
+      sprinkleKeypair = anchor.web3.Keypair.generate();
+
+      nftMint = await mintNFT(cupcakeProgram.provider, admin, admin.publicKey, 0, secondCreator.publicKey);
       const args: BakeSprinkleArgs = {
         sprinkleUid: sprinkleUID,
         tagType: 'HotPotato',
@@ -473,7 +472,7 @@ describe('Modify Listing Endpoint', async () => {
       }
     });
 
-    it('cant be moved out of scanned and force-scanning pays the seller', async () => {
+    it('cant be moved out of scanned and force-scanning pays the seller and gives out royalties correctly', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -521,7 +520,7 @@ describe('Modify Listing Endpoint', async () => {
         sprinkleUID: bnUid(sprinkleUID),
         payer: buyer.publicKey,
         buyer: buyer.publicKey,
-        offerAmount: new anchor.BN(1000000),
+        offerAmount: new anchor.BN(1000000000),
         rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
       });
       tx = VersionedTransaction.deserialize(makeOffer);
@@ -542,7 +541,8 @@ describe('Modify Listing Endpoint', async () => {
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-      let oldSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const oldSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const oldCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
       modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -559,9 +559,11 @@ describe('Modify Listing Endpoint', async () => {
       tx.sign([admin]);
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
-      let newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const newCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
 
-      expect(newSellerLamports - oldSellerLamports).to.equal(995000);
+      expect(newSellerLamports - oldSellerLamports).to.equal(895000000);
+      expect(newCreator2Lamports - oldCreator2Lamports).to.equal(50000000);
 
       try {
         modifyListing = await SolanaClient.runModifyListingTxn(
@@ -587,7 +589,117 @@ describe('Modify Listing Endpoint', async () => {
       }
     });
 
-    it('cancelling in shipped is not possible for the user beeen', async () => {
+    it('can be claimed and pays out royalties and funds seller', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { initialized: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      let makeOffer = await SolanaClient.runMakeOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        offerAmount: new anchor.BN(1000000000),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(makeOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      let acceptOffer = await SolanaClient.runAcceptOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        signer: user.publicKey,
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(acceptOffer);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: null,
+          collection: null,
+          nextState: { shipped: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      const oldSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const oldCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
+      const someNewCupcakeWallet = anchor.web3.Keypair.generate();
+
+      const claimSprinkleTx = await SolanaClient.runClaimSprinkleTxn(
+        admin,
+        sprinkleKeypair,
+        bnUid(sprinkleUID),
+        someNewCupcakeWallet.publicKey,
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+
+      tx = VersionedTransaction.deserialize(claimSprinkleTx);
+      console.log('New wallet', someNewCupcakeWallet.publicKey.toBase58());
+      tx.sign([someNewCupcakeWallet]);
+      const sig3 = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig3, 'singleGossip');
+
+      const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const newCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
+
+      expect(newSellerLamports - oldSellerLamports).to.equal(895000000);
+      expect(newCreator2Lamports - oldCreator2Lamports).to.equal(50000000);
+    });
+
+    it('cancelling in shipped is not possible for the user', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -695,6 +807,230 @@ describe('Modify Listing Endpoint', async () => {
       } catch (e) {
         expect(e.message).to.match(/0x177c/); //ListingFrozen
       }
+    });
+
+    it('refunding works when entering one of the refund-forcing states', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { initialized: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        admin.publicKey,
+        user.publicKey,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      console.log('Buyer', buyer.publicKey.toBase58());
+      let makeOffer = await SolanaClient.runMakeOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        offerAmount: new anchor.BN(1000000),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(makeOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      let acceptOffer = await SolanaClient.runAcceptOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        signer: user.publicKey,
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(acceptOffer);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      let buyerBeforeLamports = await cupcakeProgram.provider.connection.getBalance(buyer.publicKey);
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        {
+          priceSettings: null,
+          collection: null,
+          nextState: { userCanceled: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+      let buyerAfterLamports = await cupcakeProgram.provider.connection.getBalance(buyer.publicKey);
+
+      expect(buyerAfterLamports - buyerBeforeLamports).to.equal(1000000);
+    });
+    describe('with USDC', () => {
+      let tokenMint;
+
+      beforeEach(async () => {
+        tokenMint = await createMint(cupcakeProgram.provider.connection, admin, admin.publicKey, admin.publicKey, 10);
+        const token = await createAssociatedTokenAccount(
+          cupcakeProgram.provider.connection,
+          admin,
+          tokenMint,
+          buyer.publicKey
+        );
+        console.log('created token');
+        await mintTo(cupcakeProgram.provider.connection, admin, tokenMint, token, admin, 100, [], {
+          skipPreflight: true,
+        });
+        console.log('minted to ata');
+      });
+
+      it('can be claimed and pays out royalties and funds seller check-test', async () => {
+        let modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          user.publicKey,
+          user.publicKey,
+          {
+            priceSettings: {
+              priceMint: tokenMint,
+              setPrice: null,
+            },
+            collection: null,
+            nextState: { initialized: true },
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        let tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([user]);
+        let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+        modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          admin.publicKey,
+          user.publicKey,
+          {
+            priceSettings: null,
+            collection: null,
+            nextState: { forSale: true },
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([admin]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+        console.log('Buyer', buyer.publicKey.toBase58());
+        let makeOffer = await SolanaClient.runMakeOfferTxn({
+          bakery: admin.publicKey,
+          tokenMint: nftMint,
+          sprinkleUID: bnUid(sprinkleUID),
+          payer: buyer.publicKey,
+          buyer: buyer.publicKey,
+          offerAmount: new anchor.BN(100),
+          rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+        });
+        tx = VersionedTransaction.deserialize(makeOffer);
+        tx.sign([buyer]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+        let acceptOffer = await SolanaClient.runAcceptOfferTxn({
+          bakery: admin.publicKey,
+          tokenMint: nftMint,
+          sprinkleUID: bnUid(sprinkleUID),
+          signer: user.publicKey,
+          buyer: buyer.publicKey,
+          rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+        });
+        tx = VersionedTransaction.deserialize(acceptOffer);
+        tx.sign([user]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+        console.log('4');
+        modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          admin.publicKey,
+          user.publicKey,
+          {
+            priceSettings: null,
+            collection: null,
+            nextState: { shipped: true },
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([admin]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+        const oldSellerTokens = 0;
+        const oldCreator2Tokens = 0;
+        console.log('7');
+        const someNewCupcakeWallet = anchor.web3.Keypair.generate();
+
+        const claimSprinkleTx = await SolanaClient.runClaimSprinkleTxn(
+          admin,
+          sprinkleKeypair,
+          bnUid(sprinkleUID),
+          someNewCupcakeWallet.publicKey,
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        console.log('8');
+        tx = VersionedTransaction.deserialize(claimSprinkleTx);
+        console.log('New wallet', someNewCupcakeWallet.publicKey.toBase58());
+        tx.sign([someNewCupcakeWallet]);
+        const sig3 = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig3, 'singleGossip');
+
+        const newSellerTokens = (
+          await cupcakeProgram.provider.connection.getTokenAccountBalance(
+            await getAssociatedTokenAddress(user.publicKey, tokenMint)
+          )
+        ).value.uiAmount;
+        const newCreator2Tokens = (
+          await cupcakeProgram.provider.connection.getTokenAccountBalance(
+            await getAssociatedTokenAddress(secondCreator.publicKey, tokenMint)
+          )
+        ).value.uiAmount;
+
+        expect(newSellerTokens - oldSellerTokens).to.equal(89.5);
+        expect(newCreator2Tokens - oldCreator2Tokens).to.equal(5);
+      });
     });
   });
 });

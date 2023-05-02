@@ -165,7 +165,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         }
 
         // If there is an agreed price, or we are trying to move states, we need to check on whether
-        // you are user or cupcake. Otherwise, you can only just betrying to change price
+        // you are user or cupcake. Otherwise, you can only just be trying to change price
         // or collection, and that's pretty much fine.
         if listing.agreed_price.is_some() || args.next_state.is_some() {
             // tested
@@ -179,11 +179,20 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 // then if they are trying to do something other than cancel, or they are doing it while
                 // in the shipped state, blow up. We dont want them cancelling a shipped order,
                 // and we dont want them doing any other thing than cancelling.
+                // tested
                 if args.next_state != Some(ListingState::UserCanceled) || listing.state == ListingState::Shipped {
                     return Err(ErrorCode::MustUseConfigAsPayer.into());
                 }
             }
 
+        }
+
+        // Cannot claim to have user cancel if you are not user
+        // Conversely, cannot cancel as cupcake if you are not cupcake.
+        if args.next_state == Some(ListingState::CupcakeCanceled) {
+            require!(payer.key() == config.authority, ErrorCode::MustUseConfigAsPayer);
+        } else if args.next_state == Some(ListingState::UserCanceled) {
+            require!(payer.key() == listing.seller, ErrorCode::MustUseSellerAsPayer);
         }
 
         // tested
@@ -221,7 +230,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         price_mint_unwrapped,
                         &listing.to_account_info(),
                         rent,
-                        listing_seeds
+                        listing_token_seeds
                     )?;
                 }
             } else if listing.state == ListingState::ForSale {
@@ -267,18 +276,19 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         token::transfer(context.with_signer(&[&listing_seeds[..]]), listing.agreed_price.unwrap())?;
                     } else { 
                         require!(ctx.accounts.buyer.is_some(), ErrorCode::NoBuyerPresent);
-                        
+                        // tested
                         let ix = anchor_lang::solana_program::system_instruction::transfer(
                             &listing_token.key(),
                             &buyer,
                             listing_token.to_account_info().lamports(),
                         );
-                        anchor_lang::solana_program::program::invoke(
+                        anchor_lang::solana_program::program::invoke_signed(
                             &ix,
                             &[
                                 listing_token.to_account_info(),
                                 ctx.accounts.buyer.clone().unwrap().to_account_info(),
                             ],
+                            &[listing_token_seeds]
                         )?;
                     }
                 }

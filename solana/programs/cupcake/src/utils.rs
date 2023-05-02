@@ -383,10 +383,12 @@ pub fn pay_creator<'a>(
     creator: Creator,
     creator_fee: u64,
 ) -> Result<()> {
+    msg!("1");
     let current_creator_info = next_account_info(remaining_accounts)?;
     assert_keys_equal(creator.address, *current_creator_info.key)?;
-
+    msg!("2");
     if !is_native {
+        msg!("3");
         let current_creator_token_account_info = next_account_info(remaining_accounts)?;
         if current_creator_token_account_info.data_is_empty() {
             make_ata(
@@ -401,12 +403,19 @@ pub fn pay_creator<'a>(
                 fee_payer_seeds,
             )?;
         }
+        msg!(
+            "4 {} {} {}",
+            current_creator_token_account_info.key(),
+            current_creator_info.key(),
+            treasury_mint.key()
+        );
         assert_is_ata(
             current_creator_token_account_info,
             current_creator_info.key,
             &treasury_mint.key(),
             None,
         )?;
+        msg!("5");
         if creator_fee > 0 {
             invoke_signed(
                 &spl_token::instruction::transfer(

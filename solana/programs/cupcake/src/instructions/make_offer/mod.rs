@@ -111,14 +111,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let buyer = &ctx.accounts.buyer;
     let authority = config.authority.key();
     let buyer_key = buyer.key();
-    let offer_seeds = &[
+    let offer_token_seeds = &[
         PDA_PREFIX, 
         authority.as_ref(), 
         &tag.uid.to_le_bytes(),
         LISTING,
         OFFER,
         buyer_key.as_ref(),
-        &[offer.bump]
+        TOKEN,
+        &[*ctx.bumps.get("offer_token").unwrap()]
     ];
 
     require!(listing.price_mint.is_some() || args.offer_amount >= 1000000, ErrorCode::MinimumOffer);
@@ -138,15 +139,23 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     if let Some(mint) = listing.price_mint {
         require!(buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
-        require!(transfer_authority.is_some(), ErrorCode::NoTransferAuthorityPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 
         let buyer_token_acct = buyer_token.clone().unwrap();
-        assert_is_ata(
-            &buyer_token_acct.to_account_info(),
-            &buyer.key(), 
-            &mint, 
-            None)?;
+        if transfer_authority.is_some() {
+            let tfer_auth = transfer_authority.clone().unwrap();
+            assert_is_ata(
+                &buyer_token_acct.to_account_info(),
+                &buyer.key(), 
+                &mint, 
+                Some(&tfer_auth.key()))?;
+        } else {
+            assert_is_ata(
+                &buyer_token_acct.to_account_info(),
+                &buyer.key(), 
+                &mint, 
+                None)?;
+        }
 
         create_program_token_account_if_not_present(
             &offer_token,
@@ -156,7 +165,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             &price_mint.clone().unwrap(),
             &offer.to_account_info(),
             rent,
-            offer_seeds
+            offer_token_seeds
         )?;
 
         let cpi_accounts = token::Transfer {

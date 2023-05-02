@@ -667,7 +667,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
             // Listing checks
             if !listing_data.data_is_empty() {
                 // Ensure the listing key matches using a bump which is faster.
-
                 let listing: Account<Listing> = Account::try_from(&listing_data)?;
 
                 let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
@@ -681,7 +680,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     listing.state != ListingState::Scanned && 
                     listing.state != ListingState::Initialized &&
                     listing.state != ListingState::CupcakeCanceled &&
-                    listing.state != ListingState::UserCanceled
+                    listing.state != ListingState::UserCanceled && 
+                    listing.state != ListingState::Returned
                      {
                     return Err(ErrorCode::InvalidListingState.into());
                 }
@@ -706,7 +706,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         seller_ata,
                         program_id: ctx.program_id,
                     })?;
-
                     let mut data = listing_data.data.borrow_mut();
                     data[8+1+32+32]=ListingState::Scanned as u8;
                 }
