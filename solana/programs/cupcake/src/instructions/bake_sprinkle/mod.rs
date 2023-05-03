@@ -167,7 +167,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
           let token_account: Account<TokenAccount> = Account::try_from(token)?;
           
           let mut is_programmable = false;
-          if ctx.remaining_accounts.len() > 2 {
+          if ctx.remaining_accounts.len() > 2 && tag_type != TagType::HotPotato {
               let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[2])?;
               is_programmable = token_metadata.programmable_config != None;
           }
