@@ -383,12 +383,9 @@ pub fn pay_creator<'a>(
     creator: Creator,
     creator_fee: u64,
 ) -> Result<()> {
-    msg!("1");
     let current_creator_info = next_account_info(remaining_accounts)?;
     assert_keys_equal(creator.address, *current_creator_info.key)?;
-    msg!("2");
     if !is_native {
-        msg!("3");
         let current_creator_token_account_info = next_account_info(remaining_accounts)?;
         if current_creator_token_account_info.data_is_empty() {
             make_ata(
@@ -403,19 +400,12 @@ pub fn pay_creator<'a>(
                 fee_payer_seeds,
             )?;
         }
-        msg!(
-            "4 {} {} {}",
-            current_creator_token_account_info.key(),
-            current_creator_info.key(),
-            treasury_mint.key()
-        );
         assert_is_ata(
             current_creator_token_account_info,
             current_creator_info.key,
             &treasury_mint.key(),
             None,
         )?;
-        msg!("5");
         if creator_fee > 0 {
             invoke_signed(
                 &spl_token::instruction::transfer(
@@ -489,6 +479,7 @@ pub struct EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
     pub system_program: &'b AccountInfo<'info>,
     pub rent: &'d AccountInfo<'info>,
     pub seller_ata: &'c AccountInfo<'info>,
+    pub seller: &'c AccountInfo<'info>,
     pub program_id: &'a Pubkey,
 }
 
@@ -511,11 +502,11 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         rent,
         program_id,
         seller_ata,
+        seller,
         listing_token_seeds,
     } = args;
     if let Some(mint) = listing.price_mint {
         assert_keys_equal(price_mint.key(), mint)?;
-
         let listing_price_sans_royalties = pay_creator_fees(
             &mut remaining_accounts.into_iter(),
             token_metadata,
@@ -544,6 +535,21 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
                 &TOKEN[..],
             ],
         )?;
+
+        if seller_ata.data_is_empty() {
+            make_ata(
+                seller_ata.to_account_info(),
+                seller.to_account_info(),
+                price_mint.to_account_info(),
+                payer.to_account_info(),
+                ata_program.to_account_info(),
+                token_program.to_account_info(),
+                system_program.to_account_info(),
+                rent.to_account_info(),
+                &[],
+            )?;
+        }
+
         assert_is_ata(&seller_ata, &listing.seller, &mint, None)?;
 
         // Transfer the tokens.

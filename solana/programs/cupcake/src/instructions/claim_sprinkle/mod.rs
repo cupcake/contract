@@ -103,7 +103,8 @@ pub struct ClaimTag<'info> {
         // will be initialized if not setup.
         // listing (w) - the listing for the token with seed [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX]
         // listing ata (w) [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX, TOKEN] NOTE can be an empty account if using sol
-        // seller ata of token mint OR the seller themselves if SOL (w)  
+        // seller (w)
+        // seller ata  (w)  
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
         // price_mint - price mint on the listing - can be system if unset
@@ -502,13 +503,14 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let user_token_account = &ctx.remaining_accounts[1];
             let listing_data = &ctx.remaining_accounts[2];
             let listing_token_account = &ctx.remaining_accounts[3];
-            let seller_ata = &ctx.remaining_accounts[4];
-            let edition = &ctx.remaining_accounts[5];
-            let token_mint = &ctx.remaining_accounts[6];
-            let price_mint = &ctx.remaining_accounts[7];
-            let token_metadata_program = &ctx.remaining_accounts[8];
-            let ata_program = &ctx.remaining_accounts[9];
-            let token_metadata = &ctx.remaining_accounts[10];
+            let seller = &ctx.remaining_accounts[4];
+            let seller_ata = &ctx.remaining_accounts[5];
+            let edition = &ctx.remaining_accounts[6];
+            let token_mint = &ctx.remaining_accounts[7];
+            let price_mint = &ctx.remaining_accounts[8];
+            let token_metadata_program = &ctx.remaining_accounts[9];
+            let ata_program = &ctx.remaining_accounts[10];
+            let token_metadata = &ctx.remaining_accounts[11];
 
             // Not required for other modes but is for this one.
             require!(user.is_signer, ErrorCode::UserMustSign);
@@ -674,6 +676,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 let (_, bump) = Pubkey::find_program_address(listing_token_seed_no_bumps, ctx.program_id);
                 let listing_token_seeds =  &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[bump]];
 
+                require!(listing.seller == seller.key(), ErrorCode::SellerMismatch);
+
                 // Okay, you have right listing - ensure you aren't trying to potato swap during an incorrect state
 
                 if listing.state != ListingState::Shipped && 
@@ -689,7 +693,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 if listing.state == ListingState::Shipped {
                     let rent = ctx.accounts.rent.to_account_info();
                     empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
-                        remaining_accounts: &ctx.remaining_accounts[11..],
+                        remaining_accounts: &ctx.remaining_accounts[12..],
                         config,
                         tag,
                         listing: &listing,
@@ -704,6 +708,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                         system_program: &ctx.accounts.system_program,
                         rent: &rent,
                         seller_ata,
+                        seller,
                         program_id: ctx.program_id,
                     })?;
                     let mut data = listing_data.data.borrow_mut();

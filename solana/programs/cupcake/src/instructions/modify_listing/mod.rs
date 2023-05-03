@@ -343,7 +343,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     token_program: &ctx.accounts.token_program,
                     system_program: &ctx.accounts.system_program,
                     rent: &rent,
-                    seller_ata: &seller,
+                    seller: &seller,
+                    seller_ata: match seller_ata {
+                        Some(val) => val,
+                        None => &seller,
+                    },
                     program_id: ctx.program_id,
                 })?;
             }

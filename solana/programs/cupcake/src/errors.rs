@@ -145,4 +145,7 @@ pub enum ErrorCode {
 
     #[msg("Must use seller as payer")]
     MustUseSellerAsPayer,
+
+    #[msg("Seller does not match")]
+    SellerMismatch,
 }
