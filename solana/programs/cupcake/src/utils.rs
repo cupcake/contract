@@ -294,11 +294,14 @@ pub fn pay_creator_fees<'a>(
         .ok_or(ErrorCode::NumericalOverflow)?
         .checked_div(10000)
         .ok_or(ErrorCode::NumericalOverflow)? as u64;
-    let our_fee = (OUR_FEES as u128)
+    let mut our_fee = (OUR_FEES as u128)
         .checked_mul(size as u128)
         .ok_or(ErrorCode::NumericalOverflow)?
         .checked_div(10000)
         .ok_or(ErrorCode::NumericalOverflow)? as u64;
+    if our_fee == 0 {
+        our_fee = 1; //minimum fee
+    }
     let mut remaining_fee = total_fee;
     let remaining_size = size
         .checked_sub(total_fee)

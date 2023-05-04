@@ -911,7 +911,7 @@ describe('Modify Listing Endpoint', async () => {
           buyer.publicKey
         );
         console.log('created token');
-        await mintTo(cupcakeProgram.provider.connection, admin, tokenMint, token, admin, 100, [], {
+        await mintTo(cupcakeProgram.provider.connection, admin, tokenMint, token, admin, 1000, [], {
           skipPreflight: true,
         });
         console.log('minted to ata');
@@ -961,7 +961,7 @@ describe('Modify Listing Endpoint', async () => {
           sprinkleUID: bnUid(sprinkleUID),
           payer: buyer.publicKey,
           buyer: buyer.publicKey,
-          offerAmount: new anchor.BN(100),
+          offerAmount: new anchor.BN(1000),
           rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
         });
         tx = VersionedTransaction.deserialize(makeOffer);
@@ -981,7 +981,6 @@ describe('Modify Listing Endpoint', async () => {
         tx.sign([user]);
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
-        console.log('4');
         modifyListing = await SolanaClient.runModifyListingTxn(
           admin.publicKey,
           nftMint,
@@ -1000,9 +999,7 @@ describe('Modify Listing Endpoint', async () => {
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
         const oldSellerTokens = 0;
         const oldCreator2Tokens = 0;
-        console.log('7');
         const someNewCupcakeWallet = anchor.web3.Keypair.generate();
-
         const claimSprinkleTx = await SolanaClient.runClaimSprinkleTxn(
           admin,
           sprinkleKeypair,
@@ -1010,26 +1007,23 @@ describe('Modify Listing Endpoint', async () => {
           someNewCupcakeWallet.publicKey,
           cupcakeProgram.provider.connection.rpcEndpoint
         );
-        console.log('8');
+
         tx = VersionedTransaction.deserialize(claimSprinkleTx);
-        console.log('New wallet', someNewCupcakeWallet.publicKey.toBase58());
         tx.sign([someNewCupcakeWallet]);
         const sig3 = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig3, 'singleGossip');
-
         const newSellerTokens = (
           await cupcakeProgram.provider.connection.getTokenAccountBalance(
-            await getAssociatedTokenAddress(user.publicKey, tokenMint)
+            await getAssociatedTokenAddress(tokenMint, user.publicKey)
           )
         ).value.uiAmount;
         const newCreator2Tokens = (
           await cupcakeProgram.provider.connection.getTokenAccountBalance(
-            await getAssociatedTokenAddress(secondCreator.publicKey, tokenMint)
+            await getAssociatedTokenAddress(tokenMint, secondCreator.publicKey)
           )
         ).value.uiAmount;
-
-        expect(newSellerTokens - oldSellerTokens).to.equal(89.5);
-        expect(newCreator2Tokens - oldCreator2Tokens).to.equal(5);
+        expect(newSellerTokens - oldSellerTokens).to.equal(8.95e-8);
+        expect(newCreator2Tokens - oldCreator2Tokens).to.equal(0.5e-8);
       });
     });
   });
