@@ -4,13 +4,6 @@ use anchor_lang::prelude::*;
 /// Note: Accepted state can be permissionlessly cancelled after a time period
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ListingState {
-    /// Made but not visible, they need to ship it
-    /// You need to have NFT in wallet to make this listing
-    Initialized,
-
-    /// Cupcake has received the good but has not verified it's authenticity yet.
-    Received,
-
     /// No offer made yet
     ForSale,
 
@@ -27,9 +20,6 @@ pub enum ListingState {
     /// Cupcake center for shipping.
     Accepted,
 
-    /// Cupcake has verified the good and will now ship it.
-    Authenticated,
-
     /// The good is now shipped and will be claimed at some point.
     Shipped,
 
@@ -40,6 +30,15 @@ pub enum ListingState {
     /// This is the only state where the seller can claim the tokens
     /// At two weeks out, this PDA can be permissionlessly destroyed and cleaned up for lamports
     Scanned,
+
+    /// The buyer chose to vault the NFT vs have it shipped. Normally follows For Sale.
+    Vaulted,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ListingVersion {
+    Unset,
+    V1,
 }
 
 /// PDA created for each sale on the Hot potato market place
@@ -64,7 +63,7 @@ pub enum ListingState {
 #[account]
 pub struct Listing {
     /// A version identifier for this model, which we can use to cycle out the model if we need.
-    pub version: u8,
+    pub version: ListingVersion,
 
     /// Account which created and can destroy this listing.
     /// also used for give me all listings for this seller memcmp call
@@ -79,6 +78,9 @@ pub struct Listing {
     pub fee_payer: Pubkey,
 
     pub chosen_buyer: Option<Pubkey>,
+
+    /// Default false, set to true if current buyer wants to vault NFT.
+    pub vaulted_preferred: bool,
 
     /// If unset, assumed to be SOL
     pub price_mint: Option<Pubkey>,
@@ -111,6 +113,9 @@ pub struct Offer {
     /// Original payer of the token account and this account
     pub fee_payer: Pubkey,
 
+    /// If you prefer to vault the NFT vs have it shipped
+    pub vaulted_preferred: bool,
+
     /// If unset, assumed to be SOL, duplicative with the Listing but makes for easier data lookup by front end
     /// Also its possible for user or cupcake to have changed mint type since listing was made
     pub offer_mint: Option<Pubkey>,
@@ -133,6 +138,7 @@ impl Listing {
         1 + // listing state
         32 +    // original fee payer pubkey
         33 + // chosen buyer
+        1 + // vaulted preferred
         33 + // price mint
         9 + // price
         9 + // agreed price
@@ -146,6 +152,7 @@ impl Offer {
         1 + // version
         32 +    // Tag pubkey
         32 +    // fee payer pubkey
+        1 + // vaulted preferred
         33 + // offer mint
         8 + // offer amount
         2 +  // PDA bump

@@ -2,6 +2,9 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token};
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, Offer, TOKEN, OFFER};
 use crate::state::{bakery::*, sprinkle::*};
+use crate::utils::{move_hot_potato, MoveHotPotatoArgs};
+use crate::errors::ErrorCode;
+
 
 #[derive(Accounts)]
 pub struct AcceptOffer<'info> {
@@ -58,6 +61,9 @@ pub struct AcceptOffer<'info> {
     /// SPL Token Program, required for transferring tokens.
     pub token_program: Program<'info, Token>,
 
+    /// Rent
+    pub rent: Sysvar<'info, Rent>,
+
     /// Is a SOL account if sol, is a token account if price mint set
     /// CHECK: this is safe
     #[account(mut, 
@@ -82,12 +88,34 @@ pub struct AcceptOffer<'info> {
             TOKEN
         ], bump)]
     pub offer_token: UncheckedAccount<'info>,
+
+    /// Optional accounts only needed if accepting an Offer that will remain vaulted:
+    /// All of these accounts get checked in util function because of older code in
+    /// claim_sprinkle, so we avoid doing redundant checks here, making them UncheckedAccounts.
+    /// These all correspond to identical fields from claim_sprinkle.
+
+    /// Check: No
+    pub token_metadata: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub token_metadata_program: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub ata_program: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub token_mint: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub edition: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub user_token_account: Option<UncheckedAccount<'info>>,
+    /// Check: No
+    pub token: Option<UncheckedAccount<'info>>,
+
 }
 
 
 
 pub fn handler<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>
+    ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
+    creator_bump: u8, // Ignored except in hotpotato use. In hotpotato is used to make the token account.
   ) -> Result<()> {   
     let config = &mut ctx.accounts.config;
     let tag = &mut ctx.accounts.tag;
@@ -118,9 +146,47 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[*ctx.bumps.get("offer_token").unwrap()]
     ];
 
+    let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
+
+
     listing.agreed_price = Some(offer.offer_amount);
     listing.chosen_buyer = Some(offer.buyer);
-    listing.state = ListingState::Accepted;
+
+    if listing.vaulted_preferred {
+        require!(ctx.accounts.token_metadata.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.token_metadata_program.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.ata_program.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.token_mint.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.edition.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.user_token_account.is_some(), ErrorCode::MissingVaultOfferField);
+        require!(ctx.accounts.token.is_some(), ErrorCode::MissingVaultOfferField);
+
+        // Need to add shifting logic here.
+        // It remains vaulted, but the buyer now becomes the holder.
+        move_hot_potato(MoveHotPotatoArgs{
+            token_metadata: &ctx.accounts.token_metadata.unwrap().to_account_info(),
+            token_metadata_program: &ctx.accounts.token_metadata_program.unwrap().to_account_info(),
+            ata_program: &ctx.accounts.ata_program.unwrap().to_account_info(),
+            token_mint: &ctx.accounts.token_mint.unwrap().to_account_info(),
+            edition: &ctx.accounts.edition.unwrap().to_account_info(),
+            user_token_account: &ctx.accounts.user_token_account.unwrap().to_account_info(),
+            token: &ctx.accounts.token.unwrap().to_account_info(),
+            tag,
+            config,
+            user: buyer,
+            rent: &ctx.accounts.rent,
+            system_program: &ctx.accounts.system_program,
+            token_program: &ctx.accounts.token_program,
+            payer: &ctx.accounts.signer,
+            creator_bump,
+            config_seeds,
+        })?;
+        tag.vaulted = true;
+        tag.vault_authority = Some(buyer_key);
+        listing.state = ListingState::Vaulted;
+    } else {
+        listing.state = ListingState::Accepted;
+    }
     
     if listing.price_mint.is_some() {
         let cpi_accounts = token::Transfer {

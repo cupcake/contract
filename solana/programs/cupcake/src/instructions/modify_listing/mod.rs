@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Token, Mint, TokenAccount};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
+use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, ListingVersion, TOKEN};
 use crate::state::{bakery::*, sprinkle::*};
 use crate::utils::{
     create_program_token_account_if_not_present,
@@ -75,7 +75,7 @@ pub struct ModifyListing<'info> {
                   LISTING
               ], 
               space = Listing::SIZE,
-              constraint=listing.state == ListingState::Initialized || listing.seller == seller.key(),
+              constraint=listing.version == ListingVersion::Unset || listing.seller == seller.key(),
               payer=payer,
               bump)]
     pub listing: Box<Account<'info, Listing>>,
@@ -154,7 +154,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let listing_token_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[*ctx.bumps.get("listing_token").unwrap()]];
 
         // tested
-        if args.next_state == Some(ListingState::Initialized) {
+        if listing.version == ListingVersion::Unset {
             listing.bump = *ctx.bumps.get("listing").unwrap();
             listing.fee_payer = payer.key();
             listing.seller = seller.key();
@@ -170,12 +170,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
         if listing.agreed_price.is_some() || args.next_state.is_some() {
             // tested
             // User can only create the listing or cancel it, after that, cupcake must do the rest.
-            if payer.key() != config.authority && args.next_state != Some(ListingState::Initialized) && args.next_state != Some(ListingState::UserCanceled) {
+            if payer.key() != config.authority && args.next_state != Some(ListingState::ForSale) && args.next_state != Some(ListingState::UserCanceled) {
                 return Err(ErrorCode::MustUseConfigAsPayer.into());
             }
 
-            if payer.key() != config.authority && listing.state != ListingState::Initialized {
-                // If the user is trying to do something outside of the initialized state, 
+            if payer.key() != config.authority && listing.state != ListingState::ForSale {
+                // If the user is trying to do something outside of the for sale state, 
                 // then if they are trying to do something other than cancel, or they are doing it while
                 // in the shipped state, blow up. We dont want them cancelling a shipped order,
                 // and we dont want them doing any other thing than cancelling.
@@ -197,22 +197,23 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
         // tested
         // Scanned / Returned is a frozen endpoint, cannot move from here.
-        require!(listing.state != ListingState::Scanned && listing.state != ListingState::Returned, ErrorCode::ListingFrozen);
+        require!(listing.state != ListingState::Scanned && 
+            listing.state != ListingState::Returned && 
+            listing.state != ListingState::Vaulted, ErrorCode::ListingFrozen);
 
         // tested
         // To move into the accepted state, please use the accept offer instruction as seller,
         // or as buyer, make bid that is above or at asking price.
         require!(args.next_state != Some(ListingState::Accepted), ErrorCode::CannotAcceptFromModify);
 
+        require!(args.next_state != Some(ListingState::Vaulted), ErrorCode::CannotVaultFromModify);
+
         if let Some(settings) = args.price_settings {
-            // Can only change the price mint or price during initialized/received.
+            // Can only change the price mint or price during initialization.
             // Once it is for sale, there will be bids with escrowed coins potentially of wrong mints or amounts that could be accepted.
-            // In ForSale, to make things easier, we allow price changes, but not mint changes. However, bids that do become eligible for auto-acceptance
+            // After, to make things easier, we allow price changes, but not mint changes. However, bids that do become eligible for auto-acceptance
             // won't be - they will need to be closed and remade, or accepted manually by the seller.
-            if listing.state == ListingState::Initialized || 
-                listing.state == ListingState::Received ||
-                args.next_state == Some(ListingState::Initialized) ||
-                args.next_state == Some(ListingState::Received)  {
+            if listing.version == ListingVersion::Unset {
                 listing.price_mint = settings.price_mint;
                 listing.set_price = settings.set_price;
 
@@ -234,8 +235,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     )?;
                 }
             } else if listing.state == ListingState::ForSale {
-                // Regardless of what state you are transitioning to, if you are in ForSale, you can only change the price, for simplicity. We could detect
-                // if you were going back to initialized or received and then allow for mint changes but let's not be greedy.
+                // Regardless of what state you are transitioning to, if you are in ForSale, you can only change the price, for simplicity.
                 //tested
                 listing.set_price = settings.set_price;
                 
@@ -252,8 +252,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
 
         if let Some(next_state) = args.next_state {
-            if next_state == ListingState::Received || next_state == ListingState::Initialized || next_state == ListingState::ForSale ||
-                next_state == ListingState::UserCanceled || next_state == ListingState::CupcakeCanceled || next_state == ListingState::Returned {
+            if next_state == ListingState::ForSale || next_state == ListingState::UserCanceled || 
+                next_state == ListingState::CupcakeCanceled || next_state == ListingState::Returned {
                 // Refund the buyer, if there is one.
                 if let Some(buyer) = listing.chosen_buyer {
                     if let Some(price_mint) = listing.price_mint {
@@ -354,6 +354,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
         } 
 
     listing.state = args.next_state.unwrap_or(listing.state);
+    // Set at the bottom so we can have one run through where we can check
+    // if this is the first time through.
+    listing.version = ListingVersion::V1;
     Ok(())
 }
 

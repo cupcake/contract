@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-/// Different types of claim methods that can be assigned to a Sprinkle. 
+/// Different types of claim methods that can be assigned to a Sprinkle.
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TagType {
     /// Prints identical copies of a Master Edition NFT to each claimer.
@@ -25,6 +25,40 @@ pub enum TagType {
     /// Acts as a Refillable1Of1 for ProgrammableNonFungible tokens (pNFTs)
     ProgrammableUnique,
 }
+
+/*
+   Thinking about Vaulting:
+   If you send it in, you should be able to:
+       - Request to move it to any wallet from the vault authority,
+         which is set by the bakery authority to be the person currently
+         carrying it when it is vaulted.
+       - Can also be moved by current person holding it, but can be recalled
+         any time by the person who is the vault authority.
+       - While it's vaulted, it cannot be claimed from the tag
+       - Only the bakery authority can unvault/vault it
+       - We assume that vaulting == authenticating now.
+
+   Changes to Listings:
+       - We are removing the Authentication state, since we do not need it.
+
+       - If you list a Tag that has vault = true, you skip to For Sale.
+          No need for the Initialized->Received->For Sale flow.
+
+       - If a buyer wants in their Offer, they can choose to buy as Vaulted
+
+       - This boolean vaulted transfers over to Listing when offer is accepted.
+
+       - New flow is:
+           Initialized -> Received -> For Sale -> Vaulted.
+           Tag is toggled to vaulted on Vaulted state, and NFT is transferred
+           to buyer. Funds also transferred. Different end-state for Listing.
+           Vaulted is end state and can be deleted by Bakery authority for lamports
+           at some later date.
+
+       - Compare this to normal flow, just as an FYI:
+         Initialized -> Received -> For Sale -> Accepted -> Shipped -> Scanned
+         On scanned, this NFT is unvaulted.
+*/
 
 /// PDA created for each Sprinkle.
 /// Stores information about the assigned NFT/Candy Machine/etc and claim method.
@@ -61,7 +95,6 @@ pub struct Tag {
     // I dont trust candy machine structure not to change so we pre-cache settings here
     // to avoid attempting to deserialize structure that might shift
     // I do expect them to stick to their interfaces though
-
     /// The address of the Candy Machine assigned to this sprinkle, if any.
     pub candy_machine: Pubkey,
 
@@ -76,12 +109,20 @@ pub struct Tag {
 
     /// Address of the account currently holding the Hot-Potato'd token in this Sprinkle, if any.
     pub current_token_location: Pubkey,
+
+    /// A vaulted hot potato can move without going through the claim endpoint
+    /// that requires a lambda and tag authority sign off. Can just use
+    /// vault authority, or current_token_location as signer in a different
+    /// endpoint.
+    pub vaulted: bool,
+
+    /// If vaulted, who can move this token around remotely.
+    pub vault_authority: Option<Pubkey>,
 }
 
 impl Tag {
     /// The minimum required account size for a Sprinkle PDA.
-    pub const SIZE: usize = 
-        8 +     // Anchor discriminator  
+    pub const SIZE: usize = 8 +     // Anchor discriminator  
         8 +     // UID
         1 +     // SprinkleType
         32 +    // TagAuthority pubkey
@@ -97,5 +138,7 @@ impl Tag {
         32 +    // WhitelistToken pubkey
         1 +     // PDA bump
         32 +    // HotPotato location pubkey
-        50;     // ~ Padding ~
+        1 +     // Vaulted
+        33 +    // VaultAuthority
+        16; // ~ Padding ~
 }

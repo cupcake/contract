@@ -148,4 +148,13 @@ pub enum ErrorCode {
 
     #[msg("Seller does not match")]
     SellerMismatch,
+
+    #[msg("Cannot claim a vaulted token")]
+    CannotClaimVaulted,
+
+    #[msg("Cannot vault from modify, have the user accept the offer.")]
+    CannotVaultFromModify,
+
+    #[msg("Missing one of many required fields for accepting an offer that will result in a vaulted hot potato NFT. Please check the docs.")]
+    MissingVaultOfferField,
 }
