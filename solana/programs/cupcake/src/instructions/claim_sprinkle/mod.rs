@@ -100,19 +100,11 @@ pub struct ClaimTag<'info> {
         // user_token_account (w) - token account with seed [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref(), tag.token_mint.to_le_bytes()]
         // will be initialized if not setup.
         // listing (w) - the listing for the token with seed [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX]
-        // listing ata (w) [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX, TOKEN] NOTE can be an empty account if using sol
-        // seller (w)
-        // seller ata  (w)  
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
-        // price_mint - price mint on the listing - can be system if unset
-        // token_metadata_program - token mint on the tag
-        // ata program - associated token program
-        // metadata of NFT
-        // OUR_ADDRESS (w) sol account for collecting fees
-        // OUR_ADDRESS (w) ata account for collecting price mint fees
-        // royalty sol account (w) followed by royalty ata (w) pair from NFT (derive ATA from royalty accounts) [up to 5]
-        // Note you only need to pass the ata account after the sol account IF using a price mint, otherwise its only the sol accounts
+        // token_metadata
+        // token_metadata_program
+        // ata_program
     //
     // LimitedOrOpenEdition:
         // token_mint - token mint on the tag
@@ -500,15 +492,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let token = &ctx.remaining_accounts[0];
             let user_token_account = &ctx.remaining_accounts[1];
             let listing_data = &ctx.remaining_accounts[2];
-            let listing_token_account = &ctx.remaining_accounts[3];
-            let seller = &ctx.remaining_accounts[4];
-            let seller_ata = &ctx.remaining_accounts[5];
-            let edition = &ctx.remaining_accounts[6];
-            let token_mint = &ctx.remaining_accounts[7];
-            let price_mint = &ctx.remaining_accounts[8];
-            let token_metadata_program = &ctx.remaining_accounts[9];
-            let ata_program = &ctx.remaining_accounts[10];
-            let token_metadata = &ctx.remaining_accounts[11];
+            let edition = &ctx.remaining_accounts[3];
+            let token_mint = &ctx.remaining_accounts[4];
+            let token_metadata = &ctx.remaining_accounts[5];
+            let token_metadata_program = &ctx.remaining_accounts[6];
+            let ata_program = &ctx.remaining_accounts[7];
+
 
             // Not required for other modes but is for this one.
             require!(user.is_signer, ErrorCode::UserMustSign);
@@ -535,43 +524,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
             // Listing checks
             if !listing_data.data_is_empty() {
                 
-
                 // Ensure the listing key matches using a bump which is faster.
                 let listing: Account<Listing> = Account::try_from(&listing_data)?;
-
-                
-                let listing_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &[listing.bump]];
-                let listing_token_seed_no_bumps = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..]];
-                let (_, bump) = Pubkey::find_program_address(listing_token_seed_no_bumps, ctx.program_id);
-                let listing_token_seeds =  &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[bump]];
-
-                require!(listing.seller == seller.key(), ErrorCode::SellerMismatch);
 
                 // A vaulted tag that has been shipped can be de-vaulted just fine,
                 // notice the lack of check here, only in the else statement
                 // do we disallow claiming from the physical.
                 if listing.state == ListingState::Shipped {
-                    let rent = ctx.accounts.rent.to_account_info();
-                    empty_listing_escrow_to_seller(EmptyListingEscrowToSellerArgs {
-                        remaining_accounts: &ctx.remaining_accounts[12..],
-                        config,
-                        tag,
-                        listing: &listing,
-                        listing_token_account,
-                        listing_token_seeds,
-                        listing_seeds,
-                        token_metadata,
-                        payer,
-                        price_mint,
-                        ata_program,
-                        token_program: &ctx.accounts.token_program,
-                        system_program: &ctx.accounts.system_program,
-                        rent: &rent,
-                        seller_ata,
-                        seller,
-                        program_id: ctx.program_id,
-                    })?;
-
                     // Unvault the tag since it was shipped to me.
                     tag.vaulted = false;
 
