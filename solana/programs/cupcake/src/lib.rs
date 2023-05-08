@@ -56,7 +56,8 @@ pub mod cupcake {
     /// Accept an new offer
     pub fn accept_offer<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
+        bump: u8,
     ) -> Result<()> {
-        instructions::accept_offer::handler(ctx)
+        instructions::accept_offer::handler(ctx, bump)
     }
 }

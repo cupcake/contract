@@ -15,21 +15,16 @@ pub enum ListingState {
     /// At two weeks out, this PDA can be permissionlessly destroyed and cleaned up for lamports
     UserCanceled,
 
-    /// Listing has been accepted, tokens have been moved from Offer to Listing or from Buyer to Listing directly
-    /// with no intermediate offer and it is now locked up, buyer is now waiting on seller to send phygital item to
-    /// Cupcake center for shipping.
+    /// Listing has been accepted, the seller has been paid, and the buyer receives
+    /// the NFT. Immediately moves to Vaulted if a vaulted sale, otherwise later
+    /// moves to Shipped.
     Accepted,
 
-    /// The good is now shipped and will be claimed at some point.
+    /// The good is now shipped.
     Shipped,
 
     // Returned to seller for one reason or another. Normally follows Canceled state.
     Returned,
-
-    /// The tag has been scanned and now tokens are receivable
-    /// This is the only state where the seller can claim the tokens
-    /// At two weeks out, this PDA can be permissionlessly destroyed and cleaned up for lamports
-    Scanned,
 
     /// The buyer chose to vault the NFT vs have it shipped. Normally follows For Sale.
     Vaulted,

@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token};
+use anchor_spl::token::{Token, Mint};
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, Offer, TOKEN, OFFER};
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{move_hot_potato, MoveHotPotatoArgs};
+use crate::utils::{move_hot_potato, MoveHotPotatoArgs, empty_offer_escrow_to_seller, EmptyOfferEscrowToSellerArgs};
 use crate::errors::ErrorCode;
 
 
@@ -50,19 +50,16 @@ pub struct AcceptOffer<'info> {
     #[account(mut)] 
     pub buyer: UncheckedAccount<'info>,
 
+    /// Buyer
+    /// CHECK:  this is safe
+    #[account(mut, constraint=seller.key() == listing.seller)] 
+    pub seller: UncheckedAccount<'info>,
+
     /// Original fee payer, to receive lamports back
     /// CHECK:  this is safe
     #[account(mut, constraint=original_fee_payer.key() == offer.fee_payer)] 
     pub original_fee_payer: UncheckedAccount<'info>,
 
-    /// SPL System Program, required for account allocation.
-    pub system_program: Program<'info, System>,
-
-    /// SPL Token Program, required for transferring tokens.
-    pub token_program: Program<'info, Token>,
-
-    /// Rent
-    pub rent: Sysvar<'info, Rent>,
 
     /// Is a SOL account if sol, is a token account if price mint set
     /// CHECK: this is safe
@@ -89,26 +86,47 @@ pub struct AcceptOffer<'info> {
         ], bump)]
     pub offer_token: UncheckedAccount<'info>,
 
-    /// Optional accounts only needed if accepting an Offer that will remain vaulted:
+    // ATA of seller for price mint, if necessary
+    #[account(mut)] 
+    pub seller_ata: Option<UncheckedAccount<'info>>,
+
+
+    /// Mint of type of money you want to be accepted for this listing
+    pub price_mint: Option<Account<'info, Mint>>,
+
     /// All of these accounts get checked in util function because of older code in
     /// claim_sprinkle, so we avoid doing redundant checks here, making them UncheckedAccounts.
     /// These all correspond to identical fields from claim_sprinkle.
 
     /// Check: No
-    pub token_metadata: Option<UncheckedAccount<'info>>,
+    pub token_metadata: UncheckedAccount<'info>,
     /// Check: No
-    pub token_metadata_program: Option<UncheckedAccount<'info>>,
+    pub token_metadata_program: UncheckedAccount<'info>,
     /// Check: No
-    pub ata_program: Option<UncheckedAccount<'info>>,
+    pub ata_program: UncheckedAccount<'info>,
     /// Check: No
-    pub token_mint: Option<UncheckedAccount<'info>>,
+    pub token_mint: UncheckedAccount<'info>,
     /// Check: No
-    pub edition: Option<UncheckedAccount<'info>>,
+    pub edition: UncheckedAccount<'info>,
     /// Check: No
-    pub user_token_account: Option<UncheckedAccount<'info>>,
+    pub user_token_account: UncheckedAccount<'info>,
     /// Check: No
-    pub token: Option<UncheckedAccount<'info>>,
+    pub token: UncheckedAccount<'info>,
 
+    /// SPL System Program, required for account allocation.
+    pub system_program: Program<'info, System>,
+
+    /// SPL Token Program, required for transferring tokens.
+    pub token_program: Program<'info, Token>,
+
+    /// Rent
+    pub rent: Sysvar<'info, Rent>,
+
+    // Remaining accounts:
+    // OUR_ADDRESS (w) sol account for collecting fees
+    // OUR_ADDRESS (w) ata account for collecting price mint fees
+    // royalty sol account (w) followed by royalty ata (w) pair from NFT (derive ATA from royalty accounts) [up to 5]
+    // Note you only need to pass the ata account after the sol account IF using a price mint, otherwise its only the sol accounts
 }
 
 
@@ -122,7 +140,20 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let listing = &mut ctx.accounts.listing;
     let offer = &mut ctx.accounts.offer;
     let original_fee_payer = &ctx.accounts.original_fee_payer;
+    let system_program = &ctx.accounts.system_program;
     let buyer = &ctx.accounts.buyer;
+    let token_metadata =  &ctx.accounts.token_metadata;
+    let token_metadata_program =  &ctx.accounts.token_metadata_program;
+    let ata_program =  &ctx.accounts.ata_program;
+    let token_mint =  &ctx.accounts.token_mint;
+    let edition =  &ctx.accounts.edition;
+    let user_token_account =  &ctx.accounts.user_token_account;
+    let token =  &ctx.accounts.token;
+    let price_mint = &ctx.accounts.price_mint;
+    let offer_token = &ctx.accounts.offer_token;
+    let signer = &ctx.accounts.signer;
+    let seller = &ctx.accounts.seller;
+    let seller_ata = &ctx.accounts.seller_ata;
     let authority = config.authority.key();
     let buyer_key = buyer.key();
     let offer_seeds = &[
@@ -152,76 +183,73 @@ pub fn handler<'a, 'b, 'c, 'info>(
     listing.agreed_price = Some(offer.offer_amount);
     listing.chosen_buyer = Some(offer.buyer);
 
-    if listing.vaulted_preferred {
-        require!(ctx.accounts.token_metadata.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.token_metadata_program.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.ata_program.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.token_mint.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.edition.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.user_token_account.is_some(), ErrorCode::MissingVaultOfferField);
-        require!(ctx.accounts.token.is_some(), ErrorCode::MissingVaultOfferField);
 
+    if listing.vaulted_preferred {
         // Need to add shifting logic here.
         // It remains vaulted, but the buyer now becomes the holder.
-        move_hot_potato(MoveHotPotatoArgs{
-            token_metadata: &ctx.accounts.token_metadata.unwrap().to_account_info(),
-            token_metadata_program: &ctx.accounts.token_metadata_program.unwrap().to_account_info(),
-            ata_program: &ctx.accounts.ata_program.unwrap().to_account_info(),
-            token_mint: &ctx.accounts.token_mint.unwrap().to_account_info(),
-            edition: &ctx.accounts.edition.unwrap().to_account_info(),
-            user_token_account: &ctx.accounts.user_token_account.unwrap().to_account_info(),
-            token: &ctx.accounts.token.unwrap().to_account_info(),
-            tag,
-            config,
-            user: buyer,
-            rent: &ctx.accounts.rent,
-            system_program: &ctx.accounts.system_program,
-            token_program: &ctx.accounts.token_program,
-            payer: &ctx.accounts.signer,
-            creator_bump,
-            config_seeds,
-        })?;
         tag.vaulted = true;
         tag.vault_authority = Some(buyer_key);
         listing.state = ListingState::Vaulted;
     } else {
+        // Moves to accepted on the way to Shipped -> Scanned..
+        tag.vaulted = false;
+        tag.vault_authority = None;
         listing.state = ListingState::Accepted;
     }
+
+    move_hot_potato(MoveHotPotatoArgs{
+        token_metadata: &token_metadata.to_account_info(),
+        token_metadata_program: &token_metadata_program.to_account_info(),
+        ata_program: &ata_program.to_account_info(),
+        token_mint: &token_mint.to_account_info(),
+        edition: &edition.to_account_info(),
+        user_token_account: &user_token_account.to_account_info(),
+        token: &token.to_account_info(),
+        tag,
+        config,
+        user: buyer,
+        rent: &ctx.accounts.rent,
+        system_program: &ctx.accounts.system_program,
+        token_program: &ctx.accounts.token_program,
+        payer: &ctx.accounts.signer,
+        creator_bump,
+        config_seeds,
+    })?;
     
-    if listing.price_mint.is_some() {
-        let cpi_accounts = token::Transfer {
-            from: ctx.accounts.offer_token.to_account_info(),
-            to: ctx.accounts.listing_token.to_account_info(),
-            authority: offer.to_account_info(),
-        };
-        let context =
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-        token::transfer(context.with_signer(&[&offer_seeds[..]]), offer.offer_amount)?;
+    let tm = token_metadata.to_account_info();
+    let pm = if listing.price_mint.is_none() { 
+        system_program.to_account_info() 
+    } else { 
+        price_mint.clone().unwrap().to_account_info() 
+    };
+    let ap = ata_program.to_account_info();
+    let rent = ctx.accounts.rent.to_account_info();
 
-        let cpi_accounts = token::CloseAccount {
-            account: ctx.accounts.offer_token.to_account_info(),
-            destination: original_fee_payer.to_account_info(),
-            authority: offer.to_account_info(),
-        };
-        let context =
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-        token::close_account(context.with_signer(&[&offer_seeds[..]]))?;
-    } else {
-        let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.offer_token.key(),
-            &ctx.accounts.listing_token.key(),
-            offer.offer_amount,
-        );
+    require!(listing.price_mint.is_none() || Some(pm.key()) == listing.price_mint, ErrorCode::PriceMintMismatch);
 
-        anchor_lang::solana_program::program::invoke_signed(
-            &ix,
-            &[
-                ctx.accounts.offer_token.to_account_info(),
-                ctx.accounts.listing_token.to_account_info(),
-            ],
-            &[offer_token_seeds]
-        )?;
-    }
+    empty_offer_escrow_to_seller(EmptyOfferEscrowToSellerArgs {
+        remaining_accounts: ctx.remaining_accounts,
+        config,
+        tag,
+        listing: &listing,
+        offer: &offer,
+        offer_token_account: &offer_token.to_account_info(),
+        offer_seeds,
+        offer_token_seeds,
+        token_metadata: &tm,
+        payer: &signer,
+        price_mint: &pm,
+        ata_program: &ap,
+        token_program: &ctx.accounts.token_program,
+        system_program: &ctx.accounts.system_program,
+        rent: &rent,
+        seller: &seller,
+        seller_ata: match seller_ata {
+            Some(val) => val,
+            None => &seller,
+        },
+        program_id: ctx.program_id,
+    })?;
 
     offer.close(original_fee_payer.to_account_info())?;    
     Ok(())

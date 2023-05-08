@@ -12,14 +12,13 @@ use mpl_token_metadata::instruction::{
 use mpl_token_metadata::processor::AuthorizationData;
 use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, TOKEN};
+use crate::state::{PDA_PREFIX};
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
-    move_hot_potato,
-    empty_listing_escrow_to_seller, EmptyListingEscrowToSellerArgs, MoveHotPotatoArgs
+    move_hot_potato, MoveHotPotatoArgs
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -99,7 +98,6 @@ pub struct ClaimTag<'info> {
         // token (w) - current location of token (as set in tag field)
         // user_token_account (w) - token account with seed [PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), user.key().as_ref(), tag.token_mint.to_le_bytes()]
         // will be initialized if not setup.
-        // listing (w) - the listing for the token with seed [PDA_PREFIX, config.authority.as_ref(), &tag.uid.to_le_bytes(), LISTING_PREFIX]
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
         // token_metadata
@@ -491,14 +489,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
         TagType::HotPotato => {
             let token = &ctx.remaining_accounts[0];
             let user_token_account = &ctx.remaining_accounts[1];
-            let listing_data = &ctx.remaining_accounts[2];
-            let edition = &ctx.remaining_accounts[3];
-            let token_mint = &ctx.remaining_accounts[4];
-            let token_metadata = &ctx.remaining_accounts[5];
-            let token_metadata_program = &ctx.remaining_accounts[6];
-            let ata_program = &ctx.remaining_accounts[7];
+            let edition = &ctx.remaining_accounts[2];
+            let token_mint = &ctx.remaining_accounts[3];
+            let token_metadata = &ctx.remaining_accounts[4];
+            let token_metadata_program = &ctx.remaining_accounts[5];
+            let ata_program = &ctx.remaining_accounts[6];
 
 
+            // Disallow claiming while vaulted
+            require!(!tag.vaulted, ErrorCode::CannotClaimVaulted);
             // Not required for other modes but is for this one.
             require!(user.is_signer, ErrorCode::UserMustSign);
 
@@ -520,37 +519,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 creator_bump,
                 config_seeds,
             })?;
-
-            // Listing checks
-            if !listing_data.data_is_empty() {
-                
-                // Ensure the listing key matches using a bump which is faster.
-                let listing: Account<Listing> = Account::try_from(&listing_data)?;
-
-                // A vaulted tag that has been shipped can be de-vaulted just fine,
-                // notice the lack of check here, only in the else statement
-                // do we disallow claiming from the physical.
-                if listing.state == ListingState::Shipped {
-                    // Unvault the tag since it was shipped to me.
-                    tag.vaulted = false;
-
-                    // Set listing to scanned.
-                    let mut data = listing_data.data.borrow_mut();
-                    data[8+1+32+32]=ListingState::Scanned as u8;
-                } else {
-                    require!(!tag.vaulted, ErrorCode::CannotClaimVaulted);
-                }
-
-
-            } else {
-                // Ensure at least you are sending in correct address and not trying to dodge our state checks
-                let seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..]];
-                let (key, _) = Pubkey::find_program_address(seeds, &ctx.program_id);
-                assert_keys_equal(listing_data.key(), key)?;
-
-                // Disallow claiming while vaulted
-                require!(!tag.vaulted, ErrorCode::CannotClaimVaulted);
-            }
         }
     };
 

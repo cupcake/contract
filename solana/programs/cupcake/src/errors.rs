@@ -155,6 +155,6 @@ pub enum ErrorCode {
     #[msg("Cannot vault from modify, have the user accept the offer.")]
     CannotVaultFromModify,
 
-    #[msg("Missing one of many required fields for accepting an offer that will result in a vaulted hot potato NFT. Please check the docs.")]
-    MissingVaultOfferField,
+    #[msg("Cannot return to these states once buyer is set")]
+    ChosenBuyerSet,
 }

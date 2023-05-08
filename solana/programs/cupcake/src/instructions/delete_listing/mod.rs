@@ -79,7 +79,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
     require!(listing.state == ListingState::UserCanceled || 
         listing.state == ListingState::CupcakeCanceled || 
         listing.state == ListingState::Returned || 
-        listing.state == ListingState::Scanned, ErrorCode::CannotDeleteListingInThisState);
+        listing.state == ListingState::Shipped  || 
+        listing.state == ListingState::Vaulted, ErrorCode::CannotDeleteListingInThisState);
 
     if listing.price_mint.is_some() {
         let lt = listing_token;

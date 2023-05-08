@@ -1,6 +1,6 @@
 use crate::{
     errors::ErrorCode,
-    state::{Config, Listing, Tag, LISTING, PDA_PREFIX, TOKEN},
+    state::{Config, Listing, Offer, Tag, LISTING, OFFER, PDA_PREFIX, TOKEN},
 };
 use anchor_lang::{
     error,
@@ -469,14 +469,15 @@ pub fn pay_creator<'a>(
     Ok(())
 }
 
-pub struct EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
+pub struct EmptyOfferEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
     pub remaining_accounts: &'c [AccountInfo<'info>],
     pub config: &'b Account<'info, Config>,
     pub tag: &'b Account<'info, Tag>,
     pub listing: &'d Account<'info, Listing>,
-    pub listing_token_account: &'c AccountInfo<'info>,
-    pub listing_token_seeds: &'d [&'d [u8]],
-    pub listing_seeds: &'d [&'d [u8]],
+    pub offer: &'d Account<'info, Offer>,
+    pub offer_token_account: &'c AccountInfo<'info>,
+    pub offer_token_seeds: &'d [&'d [u8]],
+    pub offer_seeds: &'d [&'d [u8]],
     pub token_metadata: &'c AccountInfo<'info>,
     pub payer: &'b AccountInfo<'info>,
     pub price_mint: &'c AccountInfo<'info>,
@@ -489,16 +490,17 @@ pub struct EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd> {
     pub program_id: &'a Pubkey,
 }
 
-pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
-    args: EmptyListingEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd>,
+pub fn empty_offer_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
+    args: EmptyOfferEscrowToSellerArgs<'a, 'b, 'c, 'info, 'd>,
 ) -> Result<()> {
-    let EmptyListingEscrowToSellerArgs {
+    let EmptyOfferEscrowToSellerArgs {
         config,
         tag,
         remaining_accounts,
         listing,
-        listing_token_account,
-        listing_seeds,
+        offer,
+        offer_token_account,
+        offer_seeds,
         token_metadata,
         payer,
         price_mint,
@@ -509,35 +511,37 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         program_id,
         seller_ata,
         seller,
-        listing_token_seeds,
+        offer_token_seeds,
     } = args;
     if let Some(mint) = listing.price_mint {
         assert_keys_equal(price_mint.key(), mint)?;
         let listing_price_sans_royalties = pay_creator_fees(
             &mut remaining_accounts.into_iter(),
             token_metadata,
-            listing_token_account,
-            &listing.to_account_info(),
+            offer_token_account,
+            &offer.to_account_info(),
             payer,
             price_mint,
             ata_program,
             token_program,
             system_program,
             &rent.to_account_info(),
-            listing_seeds,
+            offer_seeds,
             &[],
-            listing.agreed_price.unwrap(),
+            offer.offer_amount,
             false,
         )?;
-        // Make sure listing ata is correct
+        // Make sure offer ata is correct
         assert_derivation(
             program_id,
-            listing_token_account,
+            offer_token_account,
             &[
                 &PDA_PREFIX[..],
                 &config.authority.as_ref()[..],
                 &tag.uid.to_le_bytes()[..],
                 &LISTING[..],
+                &OFFER[..],
+                &offer.buyer.as_ref()[..],
                 &TOKEN[..],
             ],
         )?;
@@ -560,28 +564,28 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
 
         // Transfer the tokens.
         let cpi_accounts = token::Transfer {
-            from: listing_token_account.clone(),
+            from: offer_token_account.clone(),
             to: seller_ata.clone(),
-            authority: listing.to_account_info(),
+            authority: offer.to_account_info(),
         };
         let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
         token::transfer(
-            context.with_signer(&[&listing_seeds[..]]),
+            context.with_signer(&[&offer_seeds[..]]),
             listing_price_sans_royalties,
         )?;
 
         let cpi_accounts = token::CloseAccount {
-            account: listing_token_account.clone(),
+            account: offer_token_account.clone(),
             destination: payer.to_account_info(),
-            authority: listing.to_account_info(),
+            authority: offer.to_account_info(),
         };
         let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
-        token::close_account(context.with_signer(&[&listing_seeds[..]]))?;
+        token::close_account(context.with_signer(&[&offer_seeds[..]]))?;
     } else {
         let listing_price_sans_royalties = pay_creator_fees(
             &mut remaining_accounts.into_iter(),
             token_metadata,
-            &listing_token_account.to_account_info(),
+            &offer_token_account.to_account_info(),
             &listing.to_account_info(),
             payer,
             price_mint,
@@ -589,7 +593,7 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
             &token_program,
             &system_program,
             &rent.to_account_info(),
-            listing_token_seeds,
+            offer_token_seeds,
             &[],
             listing.agreed_price.unwrap(),
             true,
@@ -598,18 +602,18 @@ pub fn empty_listing_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
         // remaining lamports go to seller.
 
         let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &listing_token_account.key(),
+            &offer_token_account.key(),
             &listing.seller,
             listing_price_sans_royalties,
         );
         anchor_lang::solana_program::program::invoke_signed(
             &ix,
             &[
-                listing_token_account.to_account_info(),
+                offer_token_account.to_account_info(),
                 // Not actually an ata in this case, is just the seller's account
                 seller_ata.to_account_info(),
             ],
-            &[listing_token_seeds],
+            &[offer_token_seeds],
         )?;
     }
 
