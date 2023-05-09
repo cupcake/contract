@@ -98,19 +98,19 @@ pub struct AcceptOffer<'info> {
     /// claim_sprinkle, so we avoid doing redundant checks here, making them UncheckedAccounts.
     /// These all correspond to identical fields from claim_sprinkle.
 
-    /// Check: No
+    /// CHECK: No
     pub token_metadata: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub token_metadata_program: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub ata_program: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub token_mint: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub edition: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub user_token_account: UncheckedAccount<'info>,
-    /// Check: No
+    /// CHECK: No
     pub token: UncheckedAccount<'info>,
 
     /// SPL System Program, required for account allocation.

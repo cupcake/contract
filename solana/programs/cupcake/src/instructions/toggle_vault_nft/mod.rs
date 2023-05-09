@@ -13,6 +13,7 @@ pub struct ToggleVaultNFT<'info> {
     #[account(mut, constraint=payer.key() == config.authority || payer.key() == user)]
     pub payer: Signer<'info>,
 
+    /// CHECK:  this is safe
     #[account(constraint=authority.key() == config.authority)]
     pub authority: UncheckedAccount<'info>,
 
@@ -48,8 +49,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
     desired_state: VaultState
   ) -> Result<()> {   
     let tag = &mut ctx.accounts.tag;
-    let payer = ctx.accounts.payer;
-    let authority = ctx.accounts.authority;
+    let payer = &ctx.accounts.payer;
+    let authority = &ctx.accounts.authority;
 
     if payer.key() != authority.key() {
         // User can only go from in transit to unvaulted.

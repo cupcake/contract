@@ -16,4 +16,5 @@ pub use create_bakery::*;
 pub use delete_listing::*;
 pub use make_offer::*;
 pub use modify_listing::*;
+pub use toggle_vault_nft::ToggleVaultNFT;
 pub use toggle_vault_nft::*;

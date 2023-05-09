@@ -63,7 +63,7 @@ pub mod cupcake {
 
     /// Toggle Vault States
     pub fn toggle_vault_nft<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, ToggleVaultNft<'info>>,
+        ctx: Context<'a, 'b, 'c, 'info, ToggleVaultNFT<'info>>,
         user: Pubkey,
         desired_state: state::VaultState,
     ) -> Result<()> {
