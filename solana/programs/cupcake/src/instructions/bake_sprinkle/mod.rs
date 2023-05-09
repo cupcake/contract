@@ -146,9 +146,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
   // Handle the delegation / authorization changes needed to enable Sprinkle claims.
   let token_mint = match tag_type {
+      TagType::TreasureChest => {
+          Err(ErrorCode::InvalidTreasureChestInstruction)
+      },
+
       TagType::SingleUse1Of1
       | TagType::Refillable1Of1
-      | TagType::ProgrammableUnique
       | TagType::WalletRestrictedFungible
       | TagType::HotPotato => {
           let token_mint = &ctx.remaining_accounts[0];
@@ -363,7 +366,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
               }
           }
 
-          token_mint.key()
+          Ok(token_mint.key())
       }
 
       TagType::CandyMachineDrop => {
@@ -447,16 +450,16 @@ pub fn handler<'a, 'b, 'c, 'info>(
           tag.candy_machine = candy_machine.key();
 
           // Return the payment token mint as token_mint.
-          payment_token_mint.key()
+          Ok(payment_token_mint.key())
       }
 
       TagType::LimitedOrOpenEdition => {
           // Verify that the provided token mint is legitimate.
           let token_mint = &ctx.remaining_accounts[0];
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
-          token_mint.key()
+          Ok(token_mint.key())
       }
-  };
+  }?;
 
   // If the Sprinkle is a SingleUse1Of1, the per_user and total_supply values will both always be 1.
   tag.per_user = match tag_type {

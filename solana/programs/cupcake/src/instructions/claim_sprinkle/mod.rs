@@ -25,10 +25,10 @@ use crate::utils::{
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct CandyMachineArgs {
     /// Discriminator of the CandyMachine instruction to hit.
-    instruction: [u8; 8],
+    pub instruction: [u8; 8],
 
     /// Candy Machine creator bump used in PDA generation.
-    creator_bump: u8,
+    pub creator_bump: u8,
 }
 
 #[derive(Accounts)]
@@ -174,6 +174,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let mut amount_to_claim = 1;
 
     match tag_type {
+        TagType::TreasureChest => {
+            Err(ErrorCode::InvalidTreasureChestInstruction)
+        },
+
         TagType::LimitedOrOpenEdition => {
             let token_mint = &ctx.remaining_accounts[0];
             let token = &ctx.remaining_accounts[1];
@@ -235,9 +239,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     ctx.accounts.rent.to_account_info(),
                 ],
             )?;
+
+            Ok(())
         }
 
         TagType::CandyMachineDrop => {
+            msg!("got here");
+
             let candy_machine_id = &ctx.remaining_accounts[0];
             let candy_machine_creator = &ctx.remaining_accounts[1];
             let candy_machine_wallet = &ctx.remaining_accounts[2];
@@ -253,11 +261,15 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let recent_slothashes = &ctx.remaining_accounts[10];
             let instruction_sysvar_account = &ctx.remaining_accounts[11];
 
+            msg!("got here 2");
+
             // Ensure the CandyMachine is coming from Cupcake's forked program.
             assert_keys_equal(
                 candy_machine_program.key(),
                 Pubkey::from_str("DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9").unwrap(),
             )?;
+
+            msg!("got here 3");
 
             // Begin assembling the list of account metas for CandyMachine CPIs.
             let mut ctr = 12;
@@ -279,6 +291,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 AccountMeta::new_readonly(recent_slothashes.key(), false),
                 AccountMeta::new_readonly(instruction_sysvar_account.key(), false),
             ];
+
+            msg!("got here 3.5");
+            
             let mut accounts = vec![
                 candy_machine_id.clone(),
                 candy_machine_creator.clone(),
@@ -298,6 +313,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 instruction_sysvar_account.clone(),
                 candy_machine_program.clone(),
             ];
+
+            msg!("got here 4");
 
             // If the CandyMachine has a whitelist token, we need to include it in the account metas.
             if tag.whitelist_mint != system_program::ID {
@@ -321,6 +338,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
             }
 
+            msg!("got here 5");
+
             // If the CandyMachine has a payment token, we need to include it in the account metas.
             if tag.token_mint != system_program::ID {
                 let token_account = &ctx.remaining_accounts[ctr];
@@ -336,6 +355,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 }
             }
 
+            msg!("got here 6");
+
             // Mint one NFT from the CandyMachine, to the claimer's wallet.
             invoke_signed(
                 &Instruction {
@@ -349,12 +370,13 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 &accounts,
                 &[config_seeds],
             )?;
+
+            Ok(())
         }
 
         TagType::WalletRestrictedFungible
         | TagType::Refillable1Of1
-        | TagType::SingleUse1Of1
-        | TagType::ProgrammableUnique => {
+        | TagType::SingleUse1Of1 => {
             let token = &ctx.remaining_accounts[0];
             let user_ata = &ctx.remaining_accounts[1];
 
@@ -483,6 +505,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
                     )?
                 }
             }
+
+            Ok(())
         }
 
         TagType::HotPotato => {
@@ -630,8 +654,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 ],
                 &[&config_seeds[..]],
             )?;
+
+            Ok(())
         }
-    };
+    }?;
 
     // Increment the num_claimed counter in the claimer's UserInfoPDA.
     ctx.accounts.user_info.num_claimed = ctx

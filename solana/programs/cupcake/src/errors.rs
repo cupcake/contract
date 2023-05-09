@@ -53,6 +53,24 @@ pub enum ErrorCode {
     #[msg("This pNFT rule is not supported by Cupcake yet.")]
     ProgrammableRuleNotSupported,
 
-    #[msg("Hot Potatos can not be pNFTs")]
-    HotPotatoCanNotBeProgrammable
+    #[msg("Hot Potatos can not be pNFTs.")]
+    HotPotatoCanNotBeProgrammable,
+
+    #[msg("TreasureChest sprinkles must be interacted with through the TreasureChest-specific endpoints.")]
+    InvalidTreasureChestInstruction,
+
+    #[msg("For each TreasureChest item, the token mint and token accounts should be passed.")]
+    InvalidTreasureChestRemainingAccounts,
+
+    #[msg("A TreasureChest can hold a maximum of 10 tokens at a time.")]
+    TooManyTreasureChestItems,
+
+    #[msg("The treasure index you provided is greater than the maximum value of 10.")]
+    InvalidTreasureIndex,
+
+    #[msg("The treasure at this index has already been retrieved.")]
+    TreasureAlreadyRetrieved,
+
+    #[msg("The token mint you provided is not really the treasure at this index.")]
+    TreasureMintMismatch,
 }

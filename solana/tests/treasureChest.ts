@@ -5,7 +5,7 @@ import { Cupcake } from '../target/types/cupcake';
 import { CupcakeProgram } from "../wip_sdk/cucpakeProgram";
 import { mintNFT } from "../wip_sdk/programmableAssets";
 
-describe('`Refillable1Of1` Sprinkle', () => {
+describe('`TreasureChest` Sprinkle', () => {
   anchor.setProvider(anchor.Provider.env());
 
   const admin = anchor.web3.Keypair.generate();
@@ -17,7 +17,7 @@ describe('`Refillable1Of1` Sprinkle', () => {
   const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
   const cupcakeProgramClient = new CupcakeProgram(cupcakeProgram, admin)
 
-  const sprinkleUID = "66554433221155"
+  const sprinkleUID = "66554493221155"
   const sprinkleAuthority = anchor.web3.Keypair.generate();
 
   it('Should create a bakery', async () => {
@@ -55,53 +55,74 @@ describe('`Refillable1Of1` Sprinkle', () => {
     console.log("nftMint2", nftMint2.toString());
   });
 
-  it('Should bake a `Refillable1Of1` Sprinkle with the first mint', async () => {
+  it('Should bake a `TreasureChest` Sprinkle', async () => {
     try {
-    const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-      "refillable1Of1",
+    const bakeSprinkleTxHash = await cupcakeProgramClient.bakeTreasureChestSprinkle(sprinkleUID, sprinkleAuthority);
+    console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+    }catch(e){console.warn(e)}
+  });
+
+  it('Should fill the `TreasureChest` Sprinkle with both of the mints', async () => {
+    try {
+    const bakeSprinkleTxHash = await cupcakeProgramClient.fillTreasureChestSprinkle(
       sprinkleUID, 
-      nftMint, 
-      1, 
-      1, 
-      sprinkleAuthority
+      [nftMint, nftMint2], 
+      sprinkleAuthority,
+      0,
     );
     console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
     }catch(e){console.warn(e)}
   });
 
-  it('Should claim the `Refillable1Of1` Sprinkle', async () => {
+  it('Should claim from the `TreasureChest` Sprinkle at index 0', async () => {
     try {
-    const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
-      sprinkleUID, 
+    const bakeSprinkleTxHash = await cupcakeProgramClient.claimFromTreasureChestSprinkle(
       user.publicKey,
-      sprinkleAuthority
-    );
-    console.log('claimSprinkleTxHash', claimSprinkleTxHash);
-    }catch(e){console.warn(e)}
-  });
-
-  it('Should rebake the `Refillable1Of1` Sprinkle with the 2nd mint', async () => {
-    try {
-    const bakeSprinkleTxHash = await cupcakeProgramClient.bakeSprinkle(
-      "refillable1Of1",
       sprinkleUID, 
-      nftMint2, 
-      1, 
-      2, 
-      sprinkleAuthority
+      sprinkleAuthority,
+      nftMint,
+      0,
     );
     console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
     }catch(e){console.warn(e)}
   });
 
-  it('Should claim the rebaked `Refillable1Of1` Sprinkle', async () => {
+  it('Should fail to claim from index 0 again', async () => {
     try {
-    const claimSprinkleTxHash = await cupcakeProgramClient.claimSprinkle(
-      sprinkleUID, 
+    const bakeSprinkleTxHash = await cupcakeProgramClient.claimFromTreasureChestSprinkle(
       user.publicKey,
-      sprinkleAuthority
+      sprinkleUID, 
+      sprinkleAuthority,
+      nftMint,
+      0,
     );
-    console.log('claimSprinkleTxHash', claimSprinkleTxHash);
+    console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+    }catch(e){console.warn(e)}
+  });
+
+  it('Should claim from the `TreasureChest` Sprinkle at index 1', async () => {
+    try {
+    const bakeSprinkleTxHash = await cupcakeProgramClient.claimFromTreasureChestSprinkle(
+      user.publicKey,
+      sprinkleUID, 
+      sprinkleAuthority,
+      nftMint2,
+      1,
+    );
+    console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
+    }catch(e){console.warn(e)}
+  });
+
+  it('Should fail to claim from index 2', async () => {
+    try {
+    const bakeSprinkleTxHash = await cupcakeProgramClient.claimFromTreasureChestSprinkle(
+      user.publicKey,
+      sprinkleUID, 
+      sprinkleAuthority,
+      nftMint,
+      2,
+    );
+    console.log('bakeSprinkleTxHash', bakeSprinkleTxHash);
     }catch(e){console.warn(e)}
   });
 });

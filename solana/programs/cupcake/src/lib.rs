@@ -36,4 +36,28 @@ pub mod cupcake {
     ) -> Result<()> {
         instructions::claim_sprinkle::handler(ctx, creator_bump)
     }
+
+    // todo
+    pub fn bake_treasure_chest<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, BakeTreasureChest<'info>>, 
+        params: BakeTreasureChestParams
+    ) -> Result<()> {
+        handle_bake_treasure_chest(ctx, params)
+    }
+
+    // todo
+    pub fn fill_treasure_chest<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, FillTreasureChest<'info>>, 
+        params: FillTreasureChestParams
+    ) -> Result<()> {
+        handle_fill_treasure_chest(ctx, params)
+    }
+
+  // todo
+  pub fn claim_from_treasure_chest<'a, 'b, 'c, 'info>(
+      ctx: Context<'a, 'b, 'c, 'info, ClaimFromTreasureChest<'info>>, 
+      params: ClaimFromTreasureChestParams
+  ) -> Result<()> {
+      handle_claim_from_treasure_chest(ctx, params)
+  }
 }
