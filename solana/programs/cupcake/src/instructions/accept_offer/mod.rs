@@ -183,17 +183,16 @@ pub fn handler<'a, 'b, 'c, 'info>(
     listing.agreed_price = Some(offer.offer_amount);
     listing.chosen_buyer = Some(offer.buyer);
 
+    tag.vault_authority = Some(buyer_key);
 
     if listing.vaulted_preferred {
         // Need to add shifting logic here.
         // It remains vaulted, but the buyer now becomes the holder.
-        tag.vaulted = true;
-        tag.vault_authority = Some(buyer_key);
+        tag.vault_state = VaultState::Vaulted;
         listing.state = ListingState::Vaulted;
     } else {
         // Moves to accepted on the way to Shipped -> Scanned..
-        tag.vaulted = false;
-        tag.vault_authority = None;
+        tag.vault_state = VaultState::InTransit;
         listing.state = ListingState::Accepted;
     }
 

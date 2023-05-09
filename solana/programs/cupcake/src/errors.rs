@@ -157,4 +157,13 @@ pub enum ErrorCode {
 
     #[msg("Cannot return to these states once buyer is set")]
     ChosenBuyerSet,
+
+    #[msg("NFT is not in transit, so a user cannot change its state")]
+    VaultNotInTransit,
+
+    #[msg("User can only take in transit NFT to unvaulted")]
+    VaultMustEnterUnvaulted,
+
+    #[msg("The only use who can claim while in transit is the vault authority")]
+    CanOnlyClaimAsVaultAuthority,
 }

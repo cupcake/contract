@@ -497,7 +497,10 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
 
             // Disallow claiming while vaulted
-            require!(!tag.vaulted, ErrorCode::CannotClaimVaulted);
+            require!(tag.vault_state != VaultState::Vaulted, ErrorCode::CannotClaimVaulted);
+            if tag.vault_state == VaultState::InTransit {
+                require!(tag.vault_authority == Some(user.key()), ErrorCode::CanOnlyClaimAsVaultAuthority);
+            }
             // Not required for other modes but is for this one.
             require!(user.is_signer, ErrorCode::UserMustSign);
 

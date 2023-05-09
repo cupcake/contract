@@ -26,6 +26,17 @@ pub enum TagType {
     ProgrammableUnique,
 }
 
+// Type of vault state
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
+pub enum VaultState {
+    /// Sitting in someone's house or on someone's person, anybody can take it with a scan
+    Unvaulted,
+    /// Sitting in our warehouse, it is unscannable
+    Vaulted,
+    /// In transit to the current vault authority, it is unscannable except by the vault authority
+    InTransit,
+}
+
 /*
    Thinking about Vaulting:
    If you send it in, you should be able to:
@@ -114,7 +125,7 @@ pub struct Tag {
     /// that requires a lambda and tag authority sign off. Can just use
     /// vault authority, or current_token_location as signer in a different
     /// endpoint.
-    pub vaulted: bool,
+    pub vault_state: VaultState,
 
     /// If vaulted, who can move this token around remotely.
     pub vault_authority: Option<Pubkey>,

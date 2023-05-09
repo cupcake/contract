@@ -60,4 +60,13 @@ pub mod cupcake {
     ) -> Result<()> {
         instructions::accept_offer::handler(ctx, bump)
     }
+
+    /// Toggle Vault States
+    pub fn toggle_vault_nft<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ToggleVaultNft<'info>>,
+        user: Pubkey,
+        desired_state: state::VaultState,
+    ) -> Result<()> {
+        instructions::toggle_vault_nft::handler(ctx, user, desired_state)
+    }
 }
