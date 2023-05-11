@@ -23,6 +23,8 @@ pub struct ModifyListingArgs {
     /// Unchecked collection of NFT. Used to rpc filter on listings.
     pub collection: Option<Pubkey>,
 
+    pub vaulted_preferred: Option<bool>,
+
     /// New state to go to
     pub next_state: Option<ListingState>,
 
@@ -197,22 +199,27 @@ pub fn handler<'a, 'b, 'c, 'info>(
             listing.collection = collection;
         }
 
+        if let Some(vaulted_preferred) = args.vaulted_preferred {
+            listing.vaulted_preferred = vaulted_preferred;
+        }
 
-        // Shipped / Returned is a frozen endpoint, cannot move from here.
-        require!(listing.state != ListingState::Shipped && 
-            listing.state != ListingState::Returned && 
-            listing.state != ListingState::Vaulted, ErrorCode::ListingFrozen);
+        // Accepted is a frozen endpoint, cannot move from here.
+        require!(listing.state != ListingState::Accepted, ErrorCode::ListingFrozen);
 
 
         if let Some(next_state) = args.next_state {
             // Basically you can only go from ForSale to a form of cancelled,
-            // from accepted to shipped,
             // and from cancelled to returned (or for sale to returned).
             // Those are the transitions.
 
             if next_state == ListingState::ForSale || next_state == ListingState::UserCanceled || 
-                next_state == ListingState::CupcakeCanceled || next_state == ListingState::Returned {
+                next_state == ListingState::CupcakeCanceled{
                 require!(listing.chosen_buyer.is_none(), ErrorCode::ChosenBuyerSet);
+            }
+
+            if next_state != ListingState::CupcakeCanceled && next_state != ListingState::UserCanceled &&
+                next_state != ListingState::ForSale && listing.chosen_buyer.is_none() {
+                return Err(ErrorCode::MustChooseBuyer.into());
             }
 
             // Cannot claim to have user cancel if you are not user
@@ -227,8 +234,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
             // To move into the accepted state, please use the accept offer instruction as seller,
             // or as buyer, make bid that is above or at asking price.
             require!(next_state != ListingState::Accepted, ErrorCode::CannotAcceptFromModify);
-
-            require!(next_state != ListingState::Vaulted, ErrorCode::CannotVaultFromModify);
         } 
 
         listing.state = args.next_state.unwrap_or(listing.state);

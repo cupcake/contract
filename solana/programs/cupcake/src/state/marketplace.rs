@@ -19,15 +19,6 @@ pub enum ListingState {
     /// the NFT. Immediately moves to Vaulted if a vaulted sale, otherwise later
     /// moves to Shipped.
     Accepted,
-
-    /// The good is now shipped.
-    Shipped,
-
-    // Returned to seller for one reason or another. Normally follows Canceled state.
-    Returned,
-
-    /// The buyer chose to vault the NFT vs have it shipped. Normally follows For Sale.
-    Vaulted,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]

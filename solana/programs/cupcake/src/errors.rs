@@ -152,18 +152,15 @@ pub enum ErrorCode {
     #[msg("Cannot claim a vaulted token")]
     CannotClaimVaulted,
 
-    #[msg("Cannot vault from modify, have the user accept the offer.")]
-    CannotVaultFromModify,
-
     #[msg("Cannot return to these states once buyer is set")]
     ChosenBuyerSet,
 
-    #[msg("NFT is not in transit, so a user cannot change its state")]
-    VaultNotInTransit,
-
-    #[msg("User can only take in transit NFT to unvaulted")]
-    VaultMustEnterUnvaulted,
+    #[msg("Invalid NFT Vault Transition")]
+    InvalidVaultTransition,
 
     #[msg("The only use who can claim while in transit is the vault authority")]
     CanOnlyClaimAsVaultAuthority,
+
+    #[msg("Cannot move to this state without a chosen buyer")]
+    MustChooseBuyer,
 }

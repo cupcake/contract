@@ -53,9 +53,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let authority = &ctx.accounts.authority;
 
     if payer.key() != authority.key() {
-        // User can only go from in transit to unvaulted.
-        require!(tag.vault_state == VaultState::InTransit, ErrorCode::VaultNotInTransit);
-        require!(desired_state == VaultState::Unvaulted, ErrorCode::VaultMustEnterUnvaulted);
+        require!(tag.vault_state == VaultState::Vaulted || tag.vault_state == VaultState::InTransit, ErrorCode::InvalidVaultTransition);
+        require!(tag.vault_state == VaultState::Vaulted && 
+            desired_state == VaultState::UnvaultingRequested, ErrorCode::InvalidVaultTransition);
+        require!(tag.vault_state == VaultState::InTransit && 
+            desired_state == VaultState::Unvaulted, ErrorCode::InvalidVaultTransition);
     };
   
     tag.vault_state = desired_state;

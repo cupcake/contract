@@ -497,7 +497,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
 
             // Disallow claiming while vaulted
-            require!(tag.vault_state != VaultState::Vaulted, ErrorCode::CannotClaimVaulted);
+            require!(tag.vault_state != VaultState::Vaulted && 
+                tag.vault_state != VaultState::UnvaultingRequested, ErrorCode::CannotClaimVaulted);
             if tag.vault_state == VaultState::InTransit {
                 require!(tag.vault_authority == Some(user.key()), ErrorCode::CanOnlyClaimAsVaultAuthority);
             }

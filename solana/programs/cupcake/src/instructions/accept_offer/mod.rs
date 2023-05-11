@@ -185,15 +185,17 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     tag.vault_authority = Some(buyer_key);
 
+    listing.state = ListingState::Accepted;
+
     if listing.vaulted_preferred {
         // Need to add shifting logic here.
         // It remains vaulted, but the buyer now becomes the holder.
         tag.vault_state = VaultState::Vaulted;
-        listing.state = ListingState::Vaulted;
     } else {
         // Moves to accepted on the way to Shipped -> Scanned..
-        tag.vault_state = VaultState::InTransit;
-        listing.state = ListingState::Accepted;
+        // Presumably a memo will be in the txn to indicate the shipping address.
+        // If we want to get super-semantic we can check for it.
+        tag.vault_state = VaultState::UnvaultingRequested;
     }
 
     move_hot_potato(MoveHotPotatoArgs{

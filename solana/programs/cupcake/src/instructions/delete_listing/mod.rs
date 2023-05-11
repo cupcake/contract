@@ -77,10 +77,8 @@ pub fn handler<'a, 'b, 'c, 'info>(
     // shipped closes the token account down, whereas canceled does not, as its possible cupcake may reify the listing again from cancelled
     // whereas once something enters scanned, it is frozen and cant leave
     require!(listing.state == ListingState::UserCanceled || 
-        listing.state == ListingState::CupcakeCanceled || 
-        listing.state == ListingState::Returned || 
-        listing.state == ListingState::Shipped  || 
-        listing.state == ListingState::Vaulted, ErrorCode::CannotDeleteListingInThisState);
+        listing.state == ListingState::CupcakeCanceled ||
+        listing.state == ListingState::Accepted, ErrorCode::CannotDeleteListingInThisState);
 
     if listing.price_mint.is_some() {
         let lt = listing_token;

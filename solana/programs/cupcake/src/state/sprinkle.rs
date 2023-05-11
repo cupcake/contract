@@ -33,43 +33,11 @@ pub enum VaultState {
     Unvaulted,
     /// Sitting in our warehouse, it is unscannable
     Vaulted,
+    /// Unvaulting requested and address encrypted in a memo txn.
+    UnvaultingRequested,
     /// In transit to the current vault authority, it is unscannable except by the vault authority
     InTransit,
 }
-
-/*
-   Thinking about Vaulting:
-   If you send it in, you should be able to:
-       - Request to move it to any wallet from the vault authority,
-         which is set by the bakery authority to be the person currently
-         carrying it when it is vaulted.
-       - Can also be moved by current person holding it, but can be recalled
-         any time by the person who is the vault authority.
-       - While it's vaulted, it cannot be claimed from the tag
-       - Only the bakery authority can unvault/vault it
-       - We assume that vaulting == authenticating now.
-
-   Changes to Listings:
-       - We are removing the Authentication state, since we do not need it.
-
-       - If you list a Tag that has vault = true, you skip to For Sale.
-          No need for the Initialized->Received->For Sale flow.
-
-       - If a buyer wants in their Offer, they can choose to buy as Vaulted
-
-       - This boolean vaulted transfers over to Listing when offer is accepted.
-
-       - New flow is:
-           Initialized -> Received -> For Sale -> Vaulted.
-           Tag is toggled to vaulted on Vaulted state, and NFT is transferred
-           to buyer. Funds also transferred. Different end-state for Listing.
-           Vaulted is end state and can be deleted by Bakery authority for lamports
-           at some later date.
-
-       - Compare this to normal flow, just as an FYI:
-         Initialized -> Received -> For Sale -> Accepted -> Shipped -> Scanned
-         On scanned, this NFT is unvaulted.
-*/
 
 /// PDA created for each Sprinkle.
 /// Stores information about the assigned NFT/Candy Machine/etc and claim method.

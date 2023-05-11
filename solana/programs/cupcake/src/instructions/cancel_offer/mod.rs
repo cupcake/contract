@@ -108,7 +108,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[offer.bump]
     ];
 
-    if listing.state != ListingState::UserCanceled && listing.state != ListingState::CupcakeCanceled && listing.state != ListingState::Returned {
+    if listing.state != ListingState::UserCanceled && listing.state != ListingState::CupcakeCanceled && listing.state != ListingState::Accepted {
         require!(buyer.is_signer, ErrorCode::BuyerMustSign);
     }
 
