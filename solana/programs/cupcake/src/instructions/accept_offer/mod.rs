@@ -1,8 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Token, Mint};
 use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, Offer, TOKEN, OFFER};
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{move_hot_potato, MoveHotPotatoArgs, empty_offer_escrow_to_seller, EmptyOfferEscrowToSellerArgs};
+use crate::utils::{empty_offer_escrow_to_seller, EmptyOfferEscrowToSellerArgs};
 use crate::errors::ErrorCode;
 
 
@@ -15,9 +16,11 @@ pub struct AcceptOffer<'info> {
     pub signer: Signer<'info>,
 
     /// PDA which stores token approvals for a Bakery, and executes the transfer during claims.
+    #[account(mut)]
     pub config: Box<Account<'info, Config>>,
 
     /// PDA which stores data about the state of a Sprinkle.
+    #[account(mut)]
     pub tag: Box<Account<'info, Tag>>,
 
     /// PDA which stores data about the state of a listing.
@@ -61,18 +64,6 @@ pub struct AcceptOffer<'info> {
     pub original_fee_payer: UncheckedAccount<'info>,
 
 
-    /// Is a SOL account if sol, is a token account if price mint set
-    /// CHECK: this is safe
-    #[account(mut, 
-        seeds=[
-            PDA_PREFIX, 
-            config.authority.key().as_ref(), 
-            &tag.uid.to_le_bytes(),
-            LISTING,
-            TOKEN
-        ], bump)]
-    pub listing_token: UncheckedAccount<'info>,
-
     /// CHECK:  this is safe
     #[account(mut, 
         seeds=[
@@ -94,24 +85,11 @@ pub struct AcceptOffer<'info> {
     /// Mint of type of money you want to be accepted for this listing
     pub price_mint: Option<Account<'info, Mint>>,
 
-    /// All of these accounts get checked in util function because of older code in
-    /// claim_sprinkle, so we avoid doing redundant checks here, making them UncheckedAccounts.
-    /// These all correspond to identical fields from claim_sprinkle.
 
     /// CHECK: No
     pub token_metadata: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub token_metadata_program: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub ata_program: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub token_mint: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub edition: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub user_token_account: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub token: UncheckedAccount<'info>,
+
+    pub ata_program: Program<'info, AssociatedToken>,
 
     /// SPL System Program, required for account allocation.
     pub system_program: Program<'info, System>,
@@ -132,8 +110,7 @@ pub struct AcceptOffer<'info> {
 
 
 pub fn handler<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
-    creator_bump: u8, // Ignored except in hotpotato use. In hotpotato is used to make the token account.
+    ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>
   ) -> Result<()> {   
     let config = &mut ctx.accounts.config;
     let tag = &mut ctx.accounts.tag;
@@ -143,12 +120,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let system_program = &ctx.accounts.system_program;
     let buyer = &ctx.accounts.buyer;
     let token_metadata =  &ctx.accounts.token_metadata;
-    let token_metadata_program =  &ctx.accounts.token_metadata_program;
     let ata_program =  &ctx.accounts.ata_program;
-    let token_mint =  &ctx.accounts.token_mint;
-    let edition =  &ctx.accounts.edition;
-    let user_token_account =  &ctx.accounts.user_token_account;
-    let token =  &ctx.accounts.token;
     let price_mint = &ctx.accounts.price_mint;
     let offer_token = &ctx.accounts.offer_token;
     let signer = &ctx.accounts.signer;
@@ -177,9 +149,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[*ctx.bumps.get("offer_token").unwrap()]
     ];
 
-    let config_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &[config.bump]];
-
-
     listing.agreed_price = Some(offer.offer_amount);
     listing.chosen_buyer = Some(offer.buyer);
 
@@ -197,25 +166,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
         // If we want to get super-semantic we can check for it.
         tag.vault_state = VaultState::UnvaultingRequested;
     }
-
-    move_hot_potato(MoveHotPotatoArgs{
-        token_metadata: &token_metadata.to_account_info(),
-        token_metadata_program: &token_metadata_program.to_account_info(),
-        ata_program: &ata_program.to_account_info(),
-        token_mint: &token_mint.to_account_info(),
-        edition: &edition.to_account_info(),
-        user_token_account: &user_token_account.to_account_info(),
-        token: &token.to_account_info(),
-        tag,
-        config,
-        user: buyer,
-        rent: &ctx.accounts.rent,
-        system_program: &ctx.accounts.system_program,
-        token_program: &ctx.accounts.token_program,
-        payer: &ctx.accounts.signer,
-        creator_bump,
-        config_seeds,
-    })?;
     
     let tm = token_metadata.to_account_info();
     let pm = if listing.price_mint.is_none() { 

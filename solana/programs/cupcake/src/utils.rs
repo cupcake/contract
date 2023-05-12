@@ -630,7 +630,7 @@ pub struct MoveHotPotatoArgs<'b, 'c, 'd, 'info> {
     pub token: &'c AccountInfo<'info>,
     pub tag: &'b mut Account<'info, Tag>,
     pub config: &'b Account<'info, Config>,
-    pub user: &'b UncheckedAccount<'info>,
+    pub user: &'b AccountInfo<'info>,
     pub rent: &'b Sysvar<'info, Rent>,
     pub system_program: &'b Program<'info, System>,
     pub token_program: &'b Program<'info, Token>,
@@ -684,6 +684,7 @@ pub fn move_hot_potato(args: MoveHotPotatoArgs) -> Result<()> {
         tag.token_mint.as_ref(),
         &[creator_bump],
     ];
+
     create_or_allocate_account_raw(
         token_program.key(),
         user_token_account,
@@ -734,7 +735,7 @@ pub fn move_hot_potato(args: MoveHotPotatoArgs) -> Result<()> {
     let context = CpiContext::new(token_program.to_account_info(), cpi_accounts);
     token::transfer(context.with_signer(&[&config_seeds[..]]), 1)?;
 
-    // Set the new ATA's owner authority to the BakeryPDA.
+    // Set the new ATA's owner authority to the user.
     let cpi_accounts = token::SetAuthority {
         current_authority: config.to_account_info(),
         account_or_mint: user_token_account.clone(),

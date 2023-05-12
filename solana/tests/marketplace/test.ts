@@ -380,7 +380,11 @@ describe('Marketplace', async () => {
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.unvaultingRequested).to.deep.equal({});
       });
@@ -416,7 +420,11 @@ describe('Marketplace', async () => {
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.unvaulted).to.deep.equal({});
       });
@@ -437,7 +445,11 @@ describe('Marketplace', async () => {
         let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.vaulted).to.deep.equal({});
       });
@@ -473,7 +485,11 @@ describe('Marketplace', async () => {
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.unvaulted).to.deep.equal({});
       });
@@ -494,7 +510,11 @@ describe('Marketplace', async () => {
         let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.inTransit).to.deep.equal({});
       });
@@ -515,7 +535,11 @@ describe('Marketplace', async () => {
         let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-        const tag = await cupcakeProgram.account.tag.fetch(listingKey);
+        const tag = await cupcakeProgram.account.tag.fetch(
+          (
+            await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+          )[0]
+        );
 
         expect(tag.vaultState.unvaultingRequested).to.deep.equal({});
       });
@@ -571,7 +595,7 @@ describe('Marketplace', async () => {
       }
     });
 
-    it('royalties are paid correctly and goes to waiting to be shipped', async () => {
+    it('royalties are paid correctly, buyer can claim the token, and goes to waiting to be shipped', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -623,6 +647,18 @@ describe('Marketplace', async () => {
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
+      let moveToken = await SolanaClient.runClaimBoughtNFTTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(moveToken);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
       const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
       const newCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
 
@@ -630,19 +666,21 @@ describe('Marketplace', async () => {
       expect(newCreator2Lamports - oldCreator2Lamports).to.equal(50000000);
 
       const tag = await cupcakeProgram.account.tag.fetch(
-        await SolanaClient.getSprinklePDA(sprinkleUID, admin.publicKey)[0]
+        (
+          await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+        )[0]
       );
 
       const location = (
-        await SolanaClient.getUserHotPotatoToken(sprinkleUID, admin.publicKey, buyer.publicKey, nftMint)
+        await SolanaClient.getUserHotPotatoToken(bnUid(sprinkleUID), admin.publicKey, buyer.publicKey, nftMint)
       )[0];
-      expect(tag.currentTokenLocation).to.equal(location);
+      expect(tag.currentTokenLocation.toBase58()).to.deep.equal(location.toBase58());
       expect(tag.vaultState.unvaultingRequested).to.deep.equal({});
       const tokenAmount = await cupcakeProgram.provider.connection.getTokenAccountBalance(location);
       expect(tokenAmount.value.uiAmount).to.equal(1);
     });
 
-    it('it can go straight to vaulted on a sale', async () => {
+    it('it can go straight to vaulted on a sale and the buyer can claim the token', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
         nftMint,
@@ -692,14 +730,28 @@ describe('Marketplace', async () => {
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
+      let moveToken = await SolanaClient.runClaimBoughtNFTTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(moveToken);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
       const tag = await cupcakeProgram.account.tag.fetch(
-        await SolanaClient.getSprinklePDA(sprinkleUID, admin.publicKey)[0]
+        (
+          await SolanaClient.getSprinklePDA(bnUid(sprinkleUID), admin.publicKey)
+        )[0]
       );
       const location = (
-        await SolanaClient.getUserHotPotatoToken(sprinkleUID, admin.publicKey, buyer.publicKey, nftMint)
+        await SolanaClient.getUserHotPotatoToken(bnUid(sprinkleUID), admin.publicKey, buyer.publicKey, nftMint)
       )[0];
 
-      expect(tag.currentTokenLocation).to.equal(location);
+      expect(tag.currentTokenLocation.toBase58()).to.deep.equal(location.toBase58());
       expect(tag.vaultState.vaulted).to.deep.equal({});
 
       const tokenAmount = await cupcakeProgram.provider.connection.getTokenAccountBalance(location);
@@ -813,6 +865,7 @@ describe('Marketplace', async () => {
             },
             collection: null,
             nextState: { forSale: true },
+            vaultedPreferred: false,
           },
           cupcakeProgram.provider.connection.rpcEndpoint
         );

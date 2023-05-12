@@ -109,6 +109,9 @@ pub struct Offer {
     /// Offer amount
     pub offer_amount: u64,
 
+    /// If true, offer has been accepted and NFT can be claimed.
+    pub offer_accepted: bool,
+
     /// Bump value used in the PDA generation for this Offer.
     pub bump: u8,
 
@@ -141,6 +144,7 @@ impl Offer {
         1 + // vaulted preferred
         33 + // offer mint
         8 + // offer amount
+        1 + // offer accepted
         2 +  // PDA bump
         50; // buffer
 }

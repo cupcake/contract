@@ -96,6 +96,7 @@ pub struct Tag {
     pub vault_state: VaultState,
 
     /// If vaulted, who can move this token around remotely.
+    /// Memcmp-able by frontend to find tokens I own.
     pub vault_authority: Option<Pubkey>,
 }
 

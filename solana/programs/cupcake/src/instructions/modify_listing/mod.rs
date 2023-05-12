@@ -1,11 +1,9 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, Mint, TokenAccount};
+use anchor_spl::token::{TokenAccount};
 use crate::errors::ErrorCode;
-use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, ListingVersion, TOKEN};
+use crate::state::{PDA_PREFIX, LISTING, Listing, ListingState, ListingVersion};
 use crate::state::{bakery::*, sprinkle::*};
-use crate::utils::{
-    create_program_token_account_if_not_present
-};
+
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct PriceSettings {
@@ -79,35 +77,7 @@ pub struct ModifyListing<'info> {
 
     /// SPL System Program, required for account allocation.
     pub system_program: Program<'info, System>,
-
-    /// SPL Token Program, required for transferring tokens.
-    pub token_program: Program<'info, Token>,
-
-    /// SPL Rent Sysvar, required for account allocation.
-    pub rent: Sysvar<'info, Rent>,
-
-    /// Is a SOL account if using SOL, and a token account if using a price mint
-    /// CHECK: this is safe
-    #[account(mut, seeds=[
-        PDA_PREFIX, 
-        config.authority.key().as_ref(), 
-        &tag.uid.to_le_bytes(),
-        LISTING,
-        TOKEN
-    ],
-    bump)]
-    pub listing_token: UncheckedAccount<'info>,
-
-    /// Mint of type of money you want to be accepted for this listing
-    pub price_mint: Option<Account<'info, Mint>>,
-
-    /// Buyer's token account, if they are using a token to pay for this listing
-    #[account(mut)]
-    pub buyer_token: Option<Account<'info, TokenAccount>>,
-
-    /// Buyer, if present
-    #[account(mut, constraint= listing.chosen_buyer.is_none() || listing.chosen_buyer == Some(buyer.key()))] 
-    pub buyer: Option<UncheckedAccount<'info>>,
+    
 
 
 
@@ -119,18 +89,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, ModifyListing<'info>>,
     args: ModifyListingArgs
   ) -> Result<()> {   
-        let tag = &mut ctx.accounts.tag;
         let config = &ctx.accounts.config;
         let payer = &ctx.accounts.payer;
         let seller = &ctx.accounts.seller;
         let listing = &mut ctx.accounts.listing;
-        let system_program = &ctx.accounts.system_program;
-        let rent = &ctx.accounts.rent;
-        let token_program = &ctx.accounts.token_program;
-        let listing_token = &ctx.accounts.listing_token;
-        let price_mint = &ctx.accounts.price_mint;
         let seller_token = &ctx.accounts.seller_token;
-        let listing_token_seeds = &[&PDA_PREFIX[..], &config.authority.as_ref()[..], &tag.uid.to_le_bytes()[..], &LISTING[..], &TOKEN[..], &[*ctx.bumps.get("listing_token").unwrap()]];
 
         // tested
         if listing.version == ListingVersion::Unset {
@@ -165,24 +128,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
             if listing.version == ListingVersion::Unset {
                 listing.price_mint = settings.price_mint;
                 listing.set_price = settings.set_price;
-
-                if listing.price_mint.is_some() {
-                    let price_mint_unwrapped = match price_mint {
-                        Some(mint) => mint,
-                        None => return Err(ErrorCode::MustSendUpPriceMint.into())
-                    };
-                    
-                    create_program_token_account_if_not_present(
-                        listing_token,
-                        system_program,
-                        payer,
-                        token_program,
-                        price_mint_unwrapped,
-                        &listing.to_account_info(),
-                        rent,
-                        listing_token_seeds
-                    )?;
-                }
             } else if listing.state == ListingState::ForSale {
                 // Regardless of what state you are transitioning to, if you are in ForSale, you can only change the price, for simplicity.
                 //tested

@@ -163,4 +163,13 @@ pub enum ErrorCode {
 
     #[msg("Cannot move to this state without a chosen buyer")]
     MustChooseBuyer,
+
+    #[msg("Offer not accepted")]
+    OfferNotAccepted,
+
+    #[msg("Not vault authority")]
+    NotVaultAuthority,
+
+    #[msg("Not vaulted")]
+    NotVaulted,
 }
