@@ -598,6 +598,68 @@ describe('Marketplace', async () => {
       }
     });
 
+    it('can have a SOL offer cancelled', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        sprinkleUID,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      console.log('Buyer', buyer.publicKey.toBase58());
+      let makeOffer = await SolanaClient.runMakeOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        feePayer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        offerAmount: new anchor.BN(1000000000),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(makeOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      const oldSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const oldBuyerLamports = await cupcakeProgram.provider.connection.getBalance(buyer.publicKey);
+      let acceptOffer = await SolanaClient.runCancelOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        feePayer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(acceptOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const newBuyerLamports = await cupcakeProgram.provider.connection.getBalance(buyer.publicKey);
+
+      // Get back rent from offer + 1sol offered since we were also fee payer
+      expect(newSellerLamports - oldSellerLamports).to.equal(0);
+      expect(newBuyerLamports - oldBuyerLamports).to.be.greaterThan(1000000000);
+    });
+
     it('royalties are paid correctly, buyer can claim the token, and goes to waiting to be shipped', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
@@ -626,6 +688,7 @@ describe('Marketplace', async () => {
         tokenMint: nftMint,
         sprinkleUID: bnUid(sprinkleUID),
         payer: buyer.publicKey,
+        feePayer: buyer.publicKey,
         buyer: buyer.publicKey,
         offerAmount: new anchor.BN(1000000000),
         rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
@@ -715,6 +778,7 @@ describe('Marketplace', async () => {
         sprinkleUID: bnUid(sprinkleUID),
         payer: buyer.publicKey,
         buyer: buyer.publicKey,
+        feePayer: buyer.publicKey,
         offerAmount: new anchor.BN(1000000000),
         rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
       });
@@ -793,6 +857,7 @@ describe('Marketplace', async () => {
         sprinkleUID: bnUid(sprinkleUID),
         payer: buyer.publicKey,
         buyer: buyer.publicKey,
+        feePayer: buyer.publicKey,
         offerAmount: new anchor.BN(1000000),
         rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
       });
@@ -857,6 +922,73 @@ describe('Marketplace', async () => {
         console.log('minted to ata');
       });
 
+      it('can have an offer cancelled and USDC coins are returned', async () => {
+        let modifyListing = await SolanaClient.runModifyListingTxn(
+          admin.publicKey,
+          nftMint,
+          user.publicKey,
+          user.publicKey,
+          sprinkleUID,
+          {
+            priceSettings: {
+              priceMint: tokenMint,
+              setPrice: null,
+            },
+            collection: null,
+            nextState: { forSale: true },
+            vaultedPreferred: false,
+          },
+          cupcakeProgram.provider.connection.rpcEndpoint
+        );
+        let tx = VersionedTransaction.deserialize(modifyListing);
+        tx.sign([user]);
+        let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+        console.log('Buyer', buyer.publicKey.toBase58());
+        let makeOffer = await SolanaClient.runMakeOfferTxn({
+          bakery: admin.publicKey,
+          tokenMint: nftMint,
+          sprinkleUID: bnUid(sprinkleUID),
+          payer: buyer.publicKey,
+          buyer: buyer.publicKey,
+          feePayer: buyer.publicKey,
+          offerAmount: new anchor.BN(1000),
+          rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+        });
+        tx = VersionedTransaction.deserialize(makeOffer);
+        tx.sign([buyer]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+        const oldSellerTokens = 0;
+        const oldBuyerTokens = 0;
+        let acceptOffer = await SolanaClient.runCancelOfferTxn({
+          bakery: admin.publicKey,
+          tokenMint: nftMint,
+          sprinkleUID: bnUid(sprinkleUID),
+          payer: buyer.publicKey,
+          feePayer: buyer.publicKey,
+          buyer: buyer.publicKey,
+          rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+        });
+        tx = VersionedTransaction.deserialize(acceptOffer);
+        tx.sign([buyer]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+        const newBuyerTokens = (
+          await cupcakeProgram.provider.connection.getTokenAccountBalance(
+            await getAssociatedTokenAddress(tokenMint, buyer.publicKey)
+          )
+        ).value.uiAmount;
+        // With 10 decimals, 1000 becomes 1e-7 deserialized.
+        // Need many 0s to hit 1.
+        // Remember when you send up new BN(1000) that it treats it as 0s from the right
+        // and decimals = 10 means that's from a 0 far away from the decimal point.
+        expect(newBuyerTokens - oldBuyerTokens).to.equal(1e-7);
+      });
+
       it('can be claimed and pays out royalties and funds seller', async () => {
         let modifyListing = await SolanaClient.runModifyListingTxn(
           admin.publicKey,
@@ -887,6 +1019,7 @@ describe('Marketplace', async () => {
           sprinkleUID: bnUid(sprinkleUID),
           payer: buyer.publicKey,
           buyer: buyer.publicKey,
+          feePayer: buyer.publicKey,
           offerAmount: new anchor.BN(1000),
           rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
         });

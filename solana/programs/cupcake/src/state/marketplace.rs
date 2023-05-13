@@ -89,15 +89,21 @@ pub struct Offer {
     /// A version identifier for this model, which we can use to cycle out the model if we need.
     pub version: u8,
 
-    /// Account which created and can destroy this offer.
+    /// Account which receives the NFT if the offer is accepted.
+    /// Can cancel the offer, but only receives funds if is also the payer.
     /// also used for give me all offers for this buyer memcmp call
     pub buyer: Pubkey,
 
     /// Tag lookup for front end
     pub tag: Pubkey,
 
-    /// Original payer of the token account and this account
+    /// Original fee payer of the token account and this account
     pub fee_payer: Pubkey,
+
+    /// You can make an offer on behalf of someone else.
+    /// If the offer gets cancelled, you get the money back,
+    /// not them!
+    pub payer: Pubkey,
 
     /// If you prefer to vault the NFT vs have it shipped
     pub vaulted_preferred: bool,
@@ -141,6 +147,7 @@ impl Offer {
         1 + // version
         32 +    // Tag pubkey
         32 +    // fee payer pubkey
+        32 + // payer pubkey
         1 + // vaulted preferred
         33 + // offer mint
         8 + // offer amount

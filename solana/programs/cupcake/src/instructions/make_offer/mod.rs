@@ -10,12 +10,18 @@ use crate::utils::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
 pub struct MakeOfferArgs {
-    offer_amount: u64
+    offer_amount: u64,
+    buyer: Pubkey
 }
 
 #[derive(Accounts)]
+#[instruction(args: MakeOfferArgs)]
 pub struct MakeOffer<'info> {
-    /// Account which pays the network and rent fees, for this transaction only.
+    /// Account which will receive lamports back from the offer.
+    #[account(mut)]
+    pub fee_payer: Signer<'info>,
+
+    /// Account which will actually pay for the offer.
     #[account(mut)]
     pub payer: Signer<'info>,
 
@@ -35,12 +41,6 @@ pub struct MakeOffer<'info> {
         bump=listing.bump)]
     pub listing: Box<Account<'info, Listing>>,
 
-
-    /// Buyer, must be a signer if using SOL
-    /// CHECK:  this is safe
-    #[account(mut)] 
-    pub buyer: UncheckedAccount<'info>,
-
     #[account(init,
         seeds=[
             PDA_PREFIX, 
@@ -48,10 +48,10 @@ pub struct MakeOffer<'info> {
             &tag.uid.to_le_bytes(),
             LISTING,
             OFFER,
-            buyer.key().as_ref()
+            args.buyer.key().as_ref()
         ],
         bump,
-        payer=payer,
+        payer=fee_payer,
         space=Offer::SIZE
     )] 
     pub offer: Box<Account<'info, Offer>>,
@@ -74,14 +74,14 @@ pub struct MakeOffer<'info> {
             &tag.uid.to_le_bytes(),
             LISTING,
             OFFER,
-            buyer.key().as_ref(),
+            args.buyer.key().as_ref(),
             TOKEN
         ], bump)]
     pub offer_token: UncheckedAccount<'info>,
 
     /// Buyer's token account, if they are using a token to pay for this listing
     #[account(mut)]
-    pub buyer_token: Option<Account<'info, TokenAccount>>,
+    pub payer_token: Option<Account<'info, TokenAccount>>,
 
     /// Transfer authority to move out of buyer token account
     pub transfer_authority: Option<Signer<'info>>,
@@ -96,11 +96,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, MakeOffer<'info>>,
     args: MakeOfferArgs
   ) -> Result<()> {   
+    let buyer = args.buyer;
     let config = &ctx.accounts.config;
     let tag = &ctx.accounts.tag;
     let listing = &mut ctx.accounts.listing;
     let offer_token = &ctx.accounts.offer_token;
-    let buyer_token = &ctx.accounts.buyer_token;
+    let payer_token = &ctx.accounts.payer_token;
     let offer = &mut ctx.accounts.offer;
     let transfer_authority = &ctx.accounts.transfer_authority;
     let system_program = &ctx.accounts.system_program;
@@ -108,16 +109,14 @@ pub fn handler<'a, 'b, 'c, 'info>(
     let token_program = &ctx.accounts.token_program;
     let payer = &mut ctx.accounts.payer;
     let price_mint = &ctx.accounts.price_mint;
-    let buyer = &ctx.accounts.buyer;
     let authority = config.authority.key();
-    let buyer_key = buyer.key();
     let offer_token_seeds = &[
         PDA_PREFIX, 
         authority.as_ref(), 
         &tag.uid.to_le_bytes(),
         LISTING,
         OFFER,
-        buyer_key.as_ref(),
+        buyer.as_ref(),
         TOKEN,
         &[*ctx.bumps.get("offer_token").unwrap()]
     ];
@@ -127,9 +126,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     offer.bump = *ctx.bumps.get("offer").unwrap();
 
-    offer.buyer = *buyer.key;
+    offer.buyer = buyer;
 
-    offer.fee_payer = *payer.key;
+    offer.payer = payer.key();
+
+    offer.fee_payer = ctx.accounts.fee_payer.key();
 
     offer.offer_amount = args.offer_amount;
 
@@ -138,21 +139,21 @@ pub fn handler<'a, 'b, 'c, 'info>(
     offer.tag = tag.key();
 
     if let Some(mint) = listing.price_mint {
-        require!(buyer_token.is_some(), ErrorCode::NoBuyerTokenPresent);
+        require!(payer_token.is_some(), ErrorCode::NoPayerTokenPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 
-        let buyer_token_acct = buyer_token.clone().unwrap();
+        let payer_token_acct = payer_token.clone().unwrap();
         if transfer_authority.is_some() {
             let tfer_auth = transfer_authority.clone().unwrap();
             assert_is_ata(
-                &buyer_token_acct.to_account_info(),
-                &buyer.key(), 
+                &payer_token_acct.to_account_info(),
+                &payer.key(), 
                 &mint, 
                 Some(&tfer_auth.key()))?;
         } else {
             assert_is_ata(
-                &buyer_token_acct.to_account_info(),
-                &buyer.key(), 
+                &payer_token_acct.to_account_info(),
+                &payer.key(), 
                 &mint, 
                 None)?;
         }
@@ -160,7 +161,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         create_program_token_account_if_not_present(
             &offer_token,
             system_program,
-            payer,
+            &ctx.accounts.fee_payer,
             token_program,
             &price_mint.clone().unwrap(),
             &offer.to_account_info(),
@@ -169,7 +170,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         )?;
 
         let cpi_accounts = token::Transfer {
-            from: buyer_token_acct.to_account_info(),
+            from: payer_token_acct.to_account_info(),
             to: offer_token.to_account_info(),
             authority: transfer_authority.clone().unwrap().to_account_info(),
         };
@@ -178,7 +179,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         token::transfer(context, args.offer_amount)?;
     } else {
         let ix = anchor_lang::solana_program::system_instruction::transfer(
-            &buyer.key(),
+            &payer.key(),
             &offer_token.key(),
             args.offer_amount,
         );
@@ -186,7 +187,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         anchor_lang::solana_program::program::invoke(
             &ix,
             &[
-                buyer.to_account_info(),
+                payer.to_account_info(),
                 offer_token.to_account_info(),
             ],
             

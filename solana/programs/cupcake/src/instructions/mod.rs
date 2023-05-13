@@ -11,6 +11,7 @@ pub mod toggle_vault_nft;
 
 pub use accept_offer::*;
 pub use bake_sprinkle::*;
+pub use cancel_offer::CancelOffer;
 pub use cancel_offer::*;
 pub use claim_bought_nft::*;
 pub use claim_sprinkle::*;

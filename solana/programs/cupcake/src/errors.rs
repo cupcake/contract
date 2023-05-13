@@ -86,8 +86,8 @@ pub enum ErrorCode {
     #[msg("Can only scan from claim")]
     CannotScanFromModify,
 
-    #[msg("No buyer token account present")]
-    NoBuyerTokenPresent,
+    #[msg("No payer token account present")]
+    NoPayerTokenPresent,
 
     #[msg("No buyer present")]
     NoBuyerPresent,
@@ -110,8 +110,8 @@ pub enum ErrorCode {
     #[msg("Price mint mismatch")]
     PriceMintMismatch,
 
-    #[msg("Buyer must sign when listing is active")]
-    BuyerMustSign,
+    #[msg("Payer must sign when listing is active")]
+    PayerMustSign,
 
     #[msg("Cannot delete listing unless it is cancelled or returned")]
     CannotDeleteListingInThisState,

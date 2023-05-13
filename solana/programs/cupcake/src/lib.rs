@@ -54,6 +54,21 @@ pub mod cupcake {
         instructions::make_offer::handler(ctx, args)
     }
 
+    /// Cancel an offer
+    pub fn cancel_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CancelOffer<'info>>,
+        buyer: Pubkey,
+    ) -> Result<()> {
+        instructions::cancel_offer::handler(ctx, buyer)
+    }
+
+    /// Delete listing
+    pub fn delete_listing<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, DeleteListing<'info>>,
+    ) -> Result<()> {
+        instructions::delete_listing::handler(ctx)
+    }
+
     /// Accept an new offer
     pub fn accept_offer<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
