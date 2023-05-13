@@ -162,6 +162,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 require!(listing.chosen_buyer.is_none(), ErrorCode::ChosenBuyerSet);
             }
 
+
+            // tested
+            // To move into the accepted state, please use the accept offer instruction as seller,
+            // or as buyer, make bid that is above or at asking price.
+            require!(next_state != ListingState::Accepted, ErrorCode::CannotAcceptFromModify);
+
             if next_state != ListingState::CupcakeCanceled && next_state != ListingState::UserCanceled &&
                 next_state != ListingState::ForSale && listing.chosen_buyer.is_none() {
                 return Err(ErrorCode::MustChooseBuyer.into());
@@ -174,11 +180,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
             } else if next_state == ListingState::UserCanceled {
                 require!(payer.key() == listing.seller, ErrorCode::MustUseSellerAsPayer);
             }
-
-            // tested
-            // To move into the accepted state, please use the accept offer instruction as seller,
-            // or as buyer, make bid that is above or at asking price.
-            require!(next_state != ListingState::Accepted, ErrorCode::CannotAcceptFromModify);
         } 
 
         listing.state = args.next_state.unwrap_or(listing.state);

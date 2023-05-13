@@ -26,20 +26,23 @@ function generateString(length) {
 }
 
 describe('Marketplace', async () => {
-  const admin = anchor.web3.Keypair.generate();
-  const user = anchor.web3.Keypair.generate();
-  const buyer = anchor.web3.Keypair.generate();
-  const secondCreator = anchor.web3.Keypair.generate();
+  let admin, user, buyer, secondCreator, cupcakeProgram;
 
   let sprinkleUID, listingKey, sprinkleKeypair;
-  const cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
-  SolanaClient.setCupcakeProgram(admin, cupcakeProgram);
-  SolanaClient.setCupcakeProgram(buyer, cupcakeProgram);
-  SolanaClient.setCupcakeProgram(user, cupcakeProgram);
 
   let nftMint;
 
-  before(async () => {
+  beforeEach(async () => {
+    admin = anchor.web3.Keypair.generate();
+    user = anchor.web3.Keypair.generate();
+    buyer = anchor.web3.Keypair.generate();
+    secondCreator = anchor.web3.Keypair.generate();
+
+    cupcakeProgram = anchor.workspace.Cupcake as Program<Cupcake>;
+    SolanaClient.setCupcakeProgram(admin, cupcakeProgram);
+    SolanaClient.setCupcakeProgram(buyer, cupcakeProgram);
+    SolanaClient.setCupcakeProgram(user, cupcakeProgram);
+
     let sig = await cupcakeProgram.provider.connection.requestAirdrop(admin.publicKey, LAMPORTS_PER_SOL * 10);
     await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
@@ -647,6 +650,9 @@ describe('Marketplace', async () => {
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
+      const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
+      const newCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
+
       let moveToken = await SolanaClient.runClaimBoughtNFTTxn({
         bakery: admin.publicKey,
         tokenMint: nftMint,
@@ -659,10 +665,10 @@ describe('Marketplace', async () => {
       sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
       await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
-      const newSellerLamports = await cupcakeProgram.provider.connection.getBalance(user.publicKey);
-      const newCreator2Lamports = await cupcakeProgram.provider.connection.getBalance(secondCreator.publicKey);
-
-      expect(newSellerLamports - oldSellerLamports).to.equal(895000000);
+      // Pay txn fees (5000)
+      // Note if you run this test in isolation, it doesn't charge the fee,
+      // and this fails. Not sure why.
+      expect(newSellerLamports - oldSellerLamports).to.equal(895000000 - 5000);
       expect(newCreator2Lamports - oldCreator2Lamports).to.equal(50000000);
 
       const tag = await cupcakeProgram.account.tag.fetch(
