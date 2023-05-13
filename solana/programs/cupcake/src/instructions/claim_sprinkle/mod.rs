@@ -501,6 +501,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
                 tag.vault_state != VaultState::UnvaultingRequested, ErrorCode::CannotClaimVaulted);
             if tag.vault_state == VaultState::InTransit {
                 require!(tag.vault_authority == Some(user.key()), ErrorCode::CanOnlyClaimAsVaultAuthority);
+                tag.vault_state = VaultState::Unvaulted;
             }
             // Not required for other modes but is for this one.
             require!(user.is_signer, ErrorCode::UserMustSign);

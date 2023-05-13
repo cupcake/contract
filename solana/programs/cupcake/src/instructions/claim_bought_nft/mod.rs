@@ -85,7 +85,9 @@ pub fn handler<'a, 'b, 'c, 'info>(
         ErrorCode::NotVaultAuthority
     );
     require!(
-        tag.vault_state == VaultState::Vaulted,
+        tag.vault_state == VaultState::Vaulted
+            || tag.vault_state == VaultState::InTransit
+            || tag.vault_state == VaultState::UnvaultingRequested,
         ErrorCode::NotVaulted
     );
     move_hot_potato(MoveHotPotatoArgs {

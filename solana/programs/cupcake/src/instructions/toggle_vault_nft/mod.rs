@@ -22,6 +22,7 @@ pub struct ToggleVaultNFT<'info> {
 
     /// PDA which stores data about the state of a Sprinkle.
     #[account(
+        mut,
         seeds = [
             PDA_PREFIX, 
             config.authority.key().as_ref(), 
@@ -54,10 +55,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     if payer.key() != authority.key() {
         require!(tag.vault_state == VaultState::Vaulted || tag.vault_state == VaultState::InTransit, ErrorCode::InvalidVaultTransition);
-        require!(tag.vault_state == VaultState::Vaulted && 
-            desired_state == VaultState::UnvaultingRequested, ErrorCode::InvalidVaultTransition);
-        require!(tag.vault_state == VaultState::InTransit && 
-            desired_state == VaultState::Unvaulted, ErrorCode::InvalidVaultTransition);
+        require!((tag.vault_state == VaultState::Vaulted && 
+            desired_state == VaultState::UnvaultingRequested) || 
+                (tag.vault_state == VaultState::InTransit && 
+            desired_state == VaultState::Unvaulted), ErrorCode::InvalidVaultTransition);
+        
     };
   
     tag.vault_state = desired_state;

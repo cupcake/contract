@@ -95,7 +95,7 @@ describe('Marketplace', async () => {
               setPrice: null,
             },
             collection: null,
-            nextState: { initialized: true },
+            nextState: { forSale: true },
           },
           cupcakeProgram.provider.connection.rpcEndpoint
         );
@@ -304,11 +304,11 @@ describe('Marketplace', async () => {
 
           let tx = VersionedTransaction.deserialize(modifyVaulting);
           tx.sign([user]);
-          let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+          let sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
           await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
           throw new Error('This logic should have failed and it didnt');
         } catch (e) {
-          expect(e.message).to.match(new RegExp('0x1789')); // CannotAcceptFromModify
+          expect(e.message).to.match(new RegExp('0x17a3')); // InvalidVaultTransition
         }
       });
 
@@ -325,7 +325,7 @@ describe('Marketplace', async () => {
 
         let tx = VersionedTransaction.deserialize(modifyVaulting);
         tx.sign([admin]);
-        let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        let sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
         try {
@@ -334,18 +334,18 @@ describe('Marketplace', async () => {
             tokenMint: nftMint,
             sprinkleUID,
             user: user.publicKey,
-            payer: admin.publicKey,
+            payer: user.publicKey,
             desiredState: { unvaulted: true },
             rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
           });
 
           tx = VersionedTransaction.deserialize(modifyVaulting);
           tx.sign([user]);
-          sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+          sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
           await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
           throw new Error('This logic should have failed and it didnt');
         } catch (e) {
-          expect(e.message).to.match(new RegExp('0x1789')); // CannotAcceptFromModify
+          expect(e.message).to.match(new RegExp('0x17a3')); // InvalidVaultTransition
         }
       });
 
