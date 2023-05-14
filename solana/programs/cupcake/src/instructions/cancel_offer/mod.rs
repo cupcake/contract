@@ -1,3 +1,4 @@
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Mint};
 use crate::errors::ErrorCode;
@@ -27,14 +28,15 @@ pub struct CancelOffer<'info> {
     pub tag: Box<Account<'info, Tag>>,
 
     /// PDA which stores data about the state of a listing.
+    /// CHECK:  this is safe
     #[account(seeds = [
             PDA_PREFIX, 
             config.authority.key().as_ref(), 
             &tag.uid.to_le_bytes(),
             LISTING
         ],
-        bump=listing.bump)]
-    pub listing: Box<Account<'info, Listing>>,
+        bump)]
+    pub listing: UncheckedAccount<'info>,
 
 
     #[account(mut,
@@ -115,11 +117,17 @@ pub fn handler<'a, 'b, 'c, 'info>(
         &[offer.bump]
     ];
 
-    if listing.state != ListingState::UserCanceled && listing.state != ListingState::CupcakeCanceled && listing.state != ListingState::Accepted {
-        require!(payer.is_signer, ErrorCode::PayerMustSign);
+    if !listing.data_is_empty() {
+        let real_listing: Account<Listing> = Account::try_from(&listing)?;
+        if real_listing.state != ListingState::UserCanceled && 
+            real_listing.state != ListingState::CupcakeCanceled && 
+            real_listing.state != ListingState::Accepted {
+            require!(payer.is_signer, ErrorCode::PayerMustSign);
+        }
     }
+    
 
-    if let Some(mint) = listing.price_mint {
+    if let Some(mint) = offer.offer_mint {
         require!(payer_token.is_some(), ErrorCode::NoPayerTokenPresent);
         require!(price_mint.is_some(), ErrorCode::NoPriceMintPresent);
 

@@ -113,7 +113,7 @@ pub enum ErrorCode {
     #[msg("Payer must sign when listing is active")]
     PayerMustSign,
 
-    #[msg("Cannot delete listing unless it is cancelled or returned")]
+    #[msg("Cannot delete listing unless it is cancelled or accepted")]
     CannotDeleteListingInThisState,
 
     #[msg("Cannot close listing if token account has a balance greater than zero")]

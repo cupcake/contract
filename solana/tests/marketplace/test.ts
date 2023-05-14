@@ -660,6 +660,163 @@ describe('Marketplace', async () => {
       expect(newBuyerLamports - oldBuyerLamports).to.be.greaterThan(1000000000);
     });
 
+    it('can destroy listing', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        sprinkleUID,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        sprinkleUID,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { userCanceled: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      let deleteListing = await SolanaClient.runDeleteListingTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(deleteListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+      console.log('Sig', sig);
+      const lamps = await cupcakeProgram.provider.connection.getBalance(
+        (
+          await SolanaClient.getListingPDA(admin.publicKey, bnUid(sprinkleUID))
+        )[0]
+      );
+
+      expect(lamps).to.equal(0);
+    });
+
+    it('can destroy a listing and then cancel an offer', async () => {
+      let modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        sprinkleUID,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { forSale: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      let tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      let sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+      let makeOffer = await SolanaClient.runMakeOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        feePayer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        offerAmount: new anchor.BN(1000000000),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(makeOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      modifyListing = await SolanaClient.runModifyListingTxn(
+        admin.publicKey,
+        nftMint,
+        user.publicKey,
+        user.publicKey,
+        sprinkleUID,
+        {
+          priceSettings: {
+            priceMint: null,
+            setPrice: null,
+          },
+          collection: null,
+          nextState: { userCanceled: true },
+        },
+        cupcakeProgram.provider.connection.rpcEndpoint
+      );
+      tx = VersionedTransaction.deserialize(modifyListing);
+      tx.sign([user]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'single');
+
+      let deleteListing = await SolanaClient.runDeleteListingTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(deleteListing);
+      tx.sign([admin]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+      console.log('Got here.');
+      const lamps = await cupcakeProgram.provider.connection.getBalance(
+        (
+          await SolanaClient.getListingPDA(admin.publicKey, bnUid(sprinkleUID))
+        )[0]
+      );
+
+      expect(lamps).to.equal(0);
+
+      // This shouldn't fail now.
+      let cancelOffer = await SolanaClient.runCancelOfferTxn({
+        bakery: admin.publicKey,
+        tokenMint: nftMint,
+        sprinkleUID: bnUid(sprinkleUID),
+        payer: buyer.publicKey,
+        feePayer: buyer.publicKey,
+        buyer: buyer.publicKey,
+        rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+      });
+      tx = VersionedTransaction.deserialize(cancelOffer);
+      tx.sign([buyer]);
+      sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
+      console.log('sig', sig);
+      await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+    });
+
     it('royalties are paid correctly, buyer can claim the token, and goes to waiting to be shipped', async () => {
       let modifyListing = await SolanaClient.runModifyListingTxn(
         admin.publicKey,
