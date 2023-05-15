@@ -25,11 +25,7 @@ pub struct ClaimBoughtNFT<'info> {
     /// These all correspond to identical fields from claim_sprinkle.
 
     /// CHECK: No
-    pub token_metadata: UncheckedAccount<'info>,
-    /// CHECK: No
     pub token_metadata_program: UncheckedAccount<'info>,
-    /// CHECK: No
-    pub ata_program: UncheckedAccount<'info>,
     /// CHECK: No
     pub token_mint: UncheckedAccount<'info>,
     /// CHECK: No
@@ -65,9 +61,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
     let tag = &mut ctx.accounts.tag;
-    let token_metadata = &ctx.accounts.token_metadata;
     let token_metadata_program = &ctx.accounts.token_metadata_program;
-    let ata_program = &ctx.accounts.ata_program;
     let token_mint = &ctx.accounts.token_mint;
     let edition = &ctx.accounts.edition;
     let user_token_account = &ctx.accounts.user_token_account;
@@ -91,9 +85,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         ErrorCode::NotVaulted
     );
     move_hot_potato(MoveHotPotatoArgs {
-        token_metadata: &token_metadata.to_account_info(),
         token_metadata_program: &token_metadata_program.to_account_info(),
-        ata_program: &ata_program.to_account_info(),
         token_mint: &token_mint.to_account_info(),
         edition: &edition.to_account_info(),
         user_token_account: &user_token_account.to_account_info(),

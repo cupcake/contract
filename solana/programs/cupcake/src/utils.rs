@@ -621,9 +621,7 @@ pub fn empty_offer_escrow_to_seller<'a, 'b, 'c, 'info, 'd>(
 }
 
 pub struct MoveHotPotatoArgs<'b, 'c, 'd, 'info> {
-    pub token_metadata: &'c AccountInfo<'info>,
     pub token_metadata_program: &'c AccountInfo<'info>,
-    pub ata_program: &'c AccountInfo<'info>,
     pub token_mint: &'c AccountInfo<'info>,
     pub edition: &'c AccountInfo<'info>,
     pub user_token_account: &'c AccountInfo<'info>,
@@ -641,10 +639,8 @@ pub struct MoveHotPotatoArgs<'b, 'c, 'd, 'info> {
 
 pub fn move_hot_potato(args: MoveHotPotatoArgs) -> Result<()> {
     let MoveHotPotatoArgs {
-        token_metadata,
-        token_metadata_program,
-        ata_program,
         token_mint,
+        token_metadata_program,
         edition,
         user_token_account,
         token,
@@ -658,21 +654,9 @@ pub fn move_hot_potato(args: MoveHotPotatoArgs) -> Result<()> {
         creator_bump,
         config_seeds,
     } = args;
-    assert_derivation(
-        &mpl_token_metadata::id(),
-        &token_metadata.to_account_info(),
-        &[
-            mpl_token_metadata::state::PREFIX.as_bytes(),
-            mpl_token_metadata::id().as_ref(),
-            tag.token_mint.as_ref(),
-        ],
-    )?;
-
     // Ensure the provided Token Metadata Program, and token accounts are legitimate.
-    assert_keys_equal(token_metadata_program.key(), mpl_token_metadata::ID)?;
     assert_keys_equal(token.key(), tag.current_token_location)?;
     assert_keys_equal(token_mint.key(), tag.token_mint)?;
-    assert_keys_equal(ata_program.key(), spl_associated_token_account::id())?;
 
     // Initialize a new account, to be used as an ATA.
     let user_key = user.key();

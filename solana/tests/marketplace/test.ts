@@ -1146,7 +1146,7 @@ describe('Marketplace', async () => {
         expect(newBuyerTokens - oldBuyerTokens).to.equal(1e-7);
       });
 
-      it('can be claimed and pays out royalties and funds seller', async () => {
+      it('can be claimed and pays out royalties and funds seller and then is claimed via scan so we can test normal claiming too', async () => {
         let modifyListing = await SolanaClient.runModifyListingTxn(
           admin.publicKey,
           nftMint,
@@ -1198,6 +1198,24 @@ describe('Marketplace', async () => {
         tx = VersionedTransaction.deserialize(acceptOffer);
         tx.sign([user]);
         sig = await cupcakeProgram.provider.connection.sendTransaction(tx, { skipPreflight: true });
+        await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
+
+        // Now lets modify it so it is like a scan as unvaulted so we can test normal claiming
+        // Normally it wouldnt go like this but we're integration testing...
+
+        let modifyVaulting = await SolanaClient.runToggleVaultTxn({
+          bakery: admin.publicKey,
+          tokenMint: nftMint,
+          sprinkleUID,
+          user: user.publicKey,
+          payer: admin.publicKey,
+          desiredState: { unvaulted: true },
+          rpcURL: cupcakeProgram.provider.connection.rpcEndpoint,
+        });
+
+        tx = VersionedTransaction.deserialize(modifyVaulting);
+        tx.sign([admin]);
+        sig = await cupcakeProgram.provider.connection.sendTransaction(tx);
         await cupcakeProgram.provider.connection.confirmTransaction(sig, 'singleGossip');
 
         const someNewCupcakeWallet = anchor.web3.Keypair.generate();

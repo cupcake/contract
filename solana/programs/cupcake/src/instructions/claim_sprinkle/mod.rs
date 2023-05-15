@@ -100,9 +100,7 @@ pub struct ClaimTag<'info> {
         // will be initialized if not setup.
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
-        // token_metadata
         // token_metadata_program
-        // ata_program
     //
     // LimitedOrOpenEdition:
         // token_mint - token mint on the tag
@@ -491,9 +489,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let user_token_account = &ctx.remaining_accounts[1];
             let edition = &ctx.remaining_accounts[2];
             let token_mint = &ctx.remaining_accounts[3];
-            let token_metadata = &ctx.remaining_accounts[4];
-            let token_metadata_program = &ctx.remaining_accounts[5];
-            let ata_program = &ctx.remaining_accounts[6];
+            let token_metadata_program = &ctx.remaining_accounts[4];
 
 
             // Disallow claiming while vaulted
@@ -507,9 +503,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             require!(user.is_signer, ErrorCode::UserMustSign);
 
             move_hot_potato(MoveHotPotatoArgs{
-                token_metadata,
                 token_metadata_program,
-                ata_program,
                 token_mint,
                 edition,
                 user_token_account,
