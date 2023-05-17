@@ -24,6 +24,10 @@ url = "https://api.mainnet-beta.solana.com"
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 [[test.validator.clone]]
 address = "auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg"
+[[test.validator.clone]]
+address = "DsRmdpRZJwagptu4MMN7GJWaPuwPgStWPUSbfAinYCg9"
+[[test.validator.clone]]
+address = "DbmHBMDepTnKyTnSccvji5FJv8tDGjEoo6ivV2qR4tY2"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

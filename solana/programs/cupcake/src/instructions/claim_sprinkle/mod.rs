@@ -7,19 +7,18 @@ use anchor_spl::token::{self, Token};
 use mpl_token_auth_rules::payload::Payload;
 use mpl_token_metadata;
 use mpl_token_metadata::instruction::{
-    thaw_delegated_account, freeze_delegated_account, 
     mint_new_edition_from_master_edition_via_token
 };
 use mpl_token_metadata::processor::AuthorizationData;
 use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use crate::errors::ErrorCode;
-use crate::state::PDA_PREFIX;
+use crate::state::{PDA_PREFIX};
 use crate::state::{bakery::*, sprinkle::*, user_info::*};
 use crate::utils::{
     assert_is_ata, assert_keys_equal, 
-    create_or_allocate_account_raw, 
     sighash, grab_update_authority, 
     get_master_edition_supply,
+    move_hot_potato, MoveHotPotatoArgs
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -101,7 +100,7 @@ pub struct ClaimTag<'info> {
         // will be initialized if not setup.
         // edition - existing edition of current token_mint
         // token_mint - token mint on the tag
-        // token_metadata_program - token mint on the tag
+        // token_metadata_program
     //
     // LimitedOrOpenEdition:
         // token_mint - token mint on the tag
@@ -492,144 +491,33 @@ pub fn handler<'a, 'b, 'c, 'info>(
             let token_mint = &ctx.remaining_accounts[3];
             let token_metadata_program = &ctx.remaining_accounts[4];
 
-            // Ensure the provided Token Metadata Program, and token accounts are legitimate.
-            assert_keys_equal(
-                token_metadata_program.key(),
-                mpl_token_metadata::ID,
-            )?;
-            assert_keys_equal(token.key(), tag.current_token_location)?;
-            assert_keys_equal(token_mint.key(), tag.token_mint)?;
 
-            // Initialize a new account, to be used as an ATA.
-            let user_key = user.key();
-            let signer_seeds = &[
-                PDA_PREFIX,
-                config.authority.as_ref(),
-                &tag.uid.to_le_bytes(),
-                user_key.as_ref(),
-                tag.token_mint.as_ref(),
-                &[creator_bump],
-            ];
-            create_or_allocate_account_raw(
-                ctx.accounts.token_program.key(),
+            // Disallow claiming while vaulted
+            require!(tag.vault_state != VaultState::Vaulted && 
+                tag.vault_state != VaultState::UnvaultingRequested, ErrorCode::CannotClaimVaulted);
+            if tag.vault_state == VaultState::InTransit {
+                require!(tag.vault_authority == Some(user.key()), ErrorCode::CanOnlyClaimAsVaultAuthority);
+                tag.vault_state = VaultState::Unvaulted;
+            }
+            // Not required for other modes but is for this one.
+            require!(user.is_signer, ErrorCode::UserMustSign);
+
+            move_hot_potato(MoveHotPotatoArgs{
+                token_metadata_program,
+                token_mint,
+                edition,
                 user_token_account,
-                &ctx.accounts.rent,
-                &ctx.accounts.system_program,
+                token,
+                tag,
+                config,
+                user,
+                rent: &ctx.accounts.rent,
+                system_program: &ctx.accounts.system_program,
+                token_program: &ctx.accounts.token_program,
                 payer,
-                anchor_spl::token::TokenAccount::LEN,
-                signer_seeds,
-            )?;
-
-            // Initialize the new account into an ATA for the user and the HotPotato token.
-            let cpi_accounts = token::InitializeAccount {
-                authority: config.to_account_info(),
-                account: user_token_account.to_account_info(),
-                mint: token_mint.to_account_info(),
-                rent: ctx.accounts.rent.to_account_info(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::initialize_account(context)?;
-
-            // Before we can transfer the frozen HotPotato 
-            // token to the new claimer, we need to thaw it.
-            invoke_signed(
-                &thaw_delegated_account(
-                    token_metadata_program.key(),
-                    config.key(),
-                    token.key(),
-                    edition.key(),
-                    token_mint.key(),
-                ),
-                &[
-                    token_metadata_program.clone(),
-                    config.to_account_info(),
-                    token.clone(),
-                    edition.clone(),
-                    token_mint.clone(),
-                ],
-                &[&config_seeds[..]],
-            )?;
-
-            // Now that the HotPotato token is thawed,
-            // the BakeryPDA can transfer it freely.
-            let cpi_accounts = token::Transfer {
-                from: token.clone(),
-                to: user_token_account.clone(),
-                authority: config.to_account_info(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::transfer(context.with_signer(&[&config_seeds[..]]), 1)?;
-
-            // Set the new ATA's owner authority to the BakeryPDA.
-            let cpi_accounts = token::SetAuthority {
-                current_authority: config.to_account_info(),
-                account_or_mint: user_token_account.clone(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::set_authority(
-                context.with_signer(&[&config_seeds[..]]),
-                spl_token::instruction::AuthorityType::AccountOwner,
-                Some(user.key()),
-            )?;
-
-            // Set the new ATA's close authority to the BakeryPDA.
-            let cpi_accounts = token::SetAuthority {
-                current_authority: user.to_account_info(),
-                account_or_mint: user_token_account.clone(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::set_authority(
-                context,
-                spl_token::instruction::AuthorityType::CloseAccount,
-                Some(config.key()),
-            )?;
-
-            // Delegate the new ATA to the BakeryPDA.
-            let cpi_accounts = token::Approve {
-                to: user_token_account.clone(),
-                delegate: config.to_account_info(),
-                authority: user.to_account_info(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::approve(context, 1)?;
-
-            // With the HotPotato token transferred to the new ATA,
-            // we can safely close the previous ATA and reclaim the rent.
-            let cpi_accounts = token::CloseAccount {
-                account: token.clone(),
-                destination: payer.to_account_info(),
-                authority: config.to_account_info(),
-            };
-            let context =
-                CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-            token::close_account(context.with_signer(&[&config_seeds[..]]))?;
-
-            // Update current_token_location to reflect the new ATA in the Sprinkle's state.
-            tag.current_token_location = user_token_account.key();
-
-            // Finish by freezing the HotPotato token inside the new ATA.
-            invoke_signed(
-                &freeze_delegated_account(
-                    token_metadata_program.key(),
-                    config.key(),
-                    user_token_account.key(),
-                    edition.key(),
-                    token_mint.key(),
-                ),
-                &[
-                    token_metadata_program.clone(),
-                    config.to_account_info(),
-                    user_token_account.clone(),
-                    edition.clone(),
-                    token_mint.clone(),
-                ],
-                &[&config_seeds[..]],
-            )?;
+                creator_bump,
+                config_seeds,
+            })?;
         }
     };
 

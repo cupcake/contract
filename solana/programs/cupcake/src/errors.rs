@@ -46,7 +46,7 @@ pub enum ErrorCode {
 
     #[msg("This tag requires that someone other than config authority pay for the mint")]
     AuthorityShouldNotBePayer,
-    
+
     #[msg("Hot potato is immutable unless the token is in an ATA on the config authority wallet.")]
     CanOnlyMutateHotPotatoWhenAtHome,
 
@@ -54,5 +54,122 @@ pub enum ErrorCode {
     ProgrammableRuleNotSupported,
 
     #[msg("Hot Potatos can not be pNFTs")]
-    HotPotatoCanNotBeProgrammable
+    HotPotatoCanNotBeProgrammable,
+
+    #[msg("Invalid seeds provided")]
+    InvalidSeeds,
+
+    #[msg("Cannot claim during this state")]
+    InvalidListingState,
+
+    #[msg("Cannot change price setting during this state")]
+    CannotChangePriceSettingsInThisState,
+
+    #[msg("If you are going to use a price_mint, you need to send up the listing token account to modify this listing")]
+    MustSendUpListingTokenAccount,
+
+    #[msg("If you are going to use a price_mint, you need to send up the price mint to modify this listing")]
+    MustSendUpPriceMint,
+
+    #[msg("Numerical Overflow")]
+    NumericalOverflow,
+
+    #[msg("Listing has been scanned and is now frozen")]
+    ListingFrozen,
+
+    #[msg("Can only accept a bid from the accept endpoint")]
+    CannotAcceptFromModify,
+
+    #[msg("Can only change price, not its mint type, while in for sale mode")]
+    CannotChangePriceMintInThisState,
+
+    #[msg("Can only scan from claim")]
+    CannotScanFromModify,
+
+    #[msg("No payer token account present")]
+    NoPayerTokenPresent,
+
+    #[msg("No buyer present")]
+    NoBuyerPresent,
+
+    #[msg("No transfer authority present")]
+    NoTransferAuthorityPresent,
+
+    #[msg("No price mint present")]
+    NoPriceMintPresent,
+
+    #[msg("No token metadata for this tag present but is required for this transaction")]
+    NoTokenMetadataPresent,
+
+    #[msg("No seller ata present")]
+    NoSellerAtaPresent,
+
+    #[msg("No ata program present")]
+    NoAtaProgramPresent,
+
+    #[msg("Price mint mismatch")]
+    PriceMintMismatch,
+
+    #[msg("Payer must sign when listing is active")]
+    PayerMustSign,
+
+    #[msg("Cannot delete listing unless it is cancelled or accepted")]
+    CannotDeleteListingInThisState,
+
+    #[msg("Cannot close listing if token account has a balance greater than zero")]
+    ListingTokenHasBalance,
+
+    #[msg("Seller must be token holder")]
+    SellerMustBeLister,
+
+    #[msg("Must hold token to sell")]
+    MustHoldTokenToSell,
+
+    #[msg("User must be a signer to use hot potato mode")]
+    UserMustSign,
+
+    #[msg("Need agreed price to goto scanned")]
+    NeedAgreedPrice,
+
+    #[msg("Need chosen buyer")]
+    NeedBuyer,
+
+    #[msg("Seller must initiate the listing")]
+    SellerMustInitiateSale,
+
+    #[msg("Listing not for sale")]
+    ListingNotForSale,
+
+    #[msg("Must bid at least 0.001 SOL")]
+    MinimumOffer,
+
+    #[msg("Must use seller as payer")]
+    MustUseSellerAsPayer,
+
+    #[msg("Seller does not match")]
+    SellerMismatch,
+
+    #[msg("Cannot claim a vaulted token")]
+    CannotClaimVaulted,
+
+    #[msg("Cannot return to these states once buyer is set")]
+    ChosenBuyerSet,
+
+    #[msg("Invalid NFT Vault Transition")]
+    InvalidVaultTransition,
+
+    #[msg("The only use who can claim while in transit is the vault authority")]
+    CanOnlyClaimAsVaultAuthority,
+
+    #[msg("Cannot move to this state without a chosen buyer")]
+    MustChooseBuyer,
+
+    #[msg("Offer not accepted")]
+    OfferNotAccepted,
+
+    #[msg("Not vault authority")]
+    NotVaultAuthority,
+
+    #[msg("Not vaulted")]
+    NotVaulted,
 }

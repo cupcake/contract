@@ -153,7 +153,6 @@ pub fn handler<'a, 'b, 'c, 'info>(
       | TagType::HotPotato => {
           let token_mint = &ctx.remaining_accounts[0];
           let token = &ctx.remaining_accounts[1];
-
           // Check that the provided ATA is legitimate.
           assert_is_ata(
               token,
@@ -162,21 +161,19 @@ pub fn handler<'a, 'b, 'c, 'info>(
               Some(&ctx.accounts.config.key()),
           )?;
 
+          
           // Check that the provided token is legitimate.
           let _mint: Account<Mint> = Account::try_from(token_mint)?;
           let token_account: Account<TokenAccount> = Account::try_from(token)?;
-          
           let mut is_programmable = false;
           if ctx.remaining_accounts.len() > 2 && tag_type != TagType::HotPotato {
               let token_metadata = Metadata::from_account_info(&ctx.remaining_accounts[2])?;
               is_programmable = token_metadata.programmable_config != None;
           }
- 
           require!(
               !is_programmable || tag_type != TagType::HotPotato,
               ErrorCode::HotPotatoCanNotBeProgrammable
           );
-
           match is_programmable {
               false => {
                   // If the Sprinkle is not a HotPotato, or if the
@@ -308,6 +305,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
               }
           }
 
+          
           // If the Sprinkle is a HotPotato, ensure that it is either a new Sprinkle,
           // or that the frozen token is still in the Bakery wallet.
           if tag_type == TagType::HotPotato {

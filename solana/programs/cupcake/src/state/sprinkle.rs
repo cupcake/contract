@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-/// Different types of claim methods that can be assigned to a Sprinkle. 
+/// Different types of claim methods that can be assigned to a Sprinkle.
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TagType {
     /// Prints identical copies of a Master Edition NFT to each claimer.
@@ -24,6 +24,19 @@ pub enum TagType {
 
     /// Acts as a Refillable1Of1 for ProgrammableNonFungible tokens (pNFTs)
     ProgrammableUnique,
+}
+
+// Type of vault state
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, Debug)]
+pub enum VaultState {
+    /// Sitting in someone's house or on someone's person, anybody can take it with a scan
+    Unvaulted,
+    /// Sitting in our warehouse, it is unscannable
+    Vaulted,
+    /// Unvaulting requested and address encrypted in a memo txn.
+    UnvaultingRequested,
+    /// In transit to the current vault authority, it is unscannable except by the vault authority
+    InTransit,
 }
 
 /// PDA created for each Sprinkle.
@@ -61,7 +74,6 @@ pub struct Tag {
     // I dont trust candy machine structure not to change so we pre-cache settings here
     // to avoid attempting to deserialize structure that might shift
     // I do expect them to stick to their interfaces though
-
     /// The address of the Candy Machine assigned to this sprinkle, if any.
     pub candy_machine: Pubkey,
 
@@ -76,12 +88,21 @@ pub struct Tag {
 
     /// Address of the account currently holding the Hot-Potato'd token in this Sprinkle, if any.
     pub current_token_location: Pubkey,
+
+    /// A vaulted hot potato can move without going through the claim endpoint
+    /// that requires a lambda and tag authority sign off. Can just use
+    /// vault authority, or current_token_location as signer in a different
+    /// endpoint.
+    pub vault_state: VaultState,
+
+    /// If vaulted, who can move this token around remotely.
+    /// Memcmp-able by frontend to find tokens I own.
+    pub vault_authority: Option<Pubkey>,
 }
 
 impl Tag {
     /// The minimum required account size for a Sprinkle PDA.
-    pub const SIZE: usize = 
-        8 +     // Anchor discriminator  
+    pub const SIZE: usize = 8 +     // Anchor discriminator  
         8 +     // UID
         1 +     // SprinkleType
         32 +    // TagAuthority pubkey
@@ -97,5 +118,7 @@ impl Tag {
         32 +    // WhitelistToken pubkey
         1 +     // PDA bump
         32 +    // HotPotato location pubkey
-        50;     // ~ Padding ~
+        1 +     // Vaulted
+        33 +    // VaultAuthority
+        16; // ~ Padding ~
 }

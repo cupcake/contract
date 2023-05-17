@@ -687,6 +687,7 @@ dependencies = [
  "mpl-token-auth-rules",
  "mpl-token-metadata",
  "rmp-serde",
+ "spl-associated-token-account",
  "spl-token",
 ]
 

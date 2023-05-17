@@ -1,11 +1,12 @@
 use anchor_lang::prelude::*;
 
+pub mod errors;
 pub mod instructions;
 pub mod state;
-pub mod errors;
 pub mod utils;
 
 use instructions::*;
+use state::VaultState;
 
 declare_id!("cakeGJxEdGpZ3MJP8sM3QypwzuzZpko1ueonUQgKLPE");
 
@@ -35,5 +36,60 @@ pub mod cupcake {
         creator_bump: u8,
     ) -> Result<()> {
         instructions::claim_sprinkle::handler(ctx, creator_bump)
+    }
+
+    /// Modify or create a new listing
+    pub fn modify_listing<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ModifyListing<'info>>,
+        args: ModifyListingArgs,
+    ) -> Result<()> {
+        instructions::modify_listing::handler(ctx, args)
+    }
+
+    /// Create a new offer
+    pub fn make_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, MakeOffer<'info>>,
+        args: MakeOfferArgs,
+    ) -> Result<()> {
+        instructions::make_offer::handler(ctx, args)
+    }
+
+    /// Cancel an offer
+    pub fn cancel_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CancelOffer<'info>>,
+        buyer: Pubkey,
+    ) -> Result<()> {
+        instructions::cancel_offer::handler(ctx, buyer)
+    }
+
+    /// Delete listing
+    pub fn delete_listing<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, DeleteListing<'info>>,
+    ) -> Result<()> {
+        instructions::delete_listing::handler(ctx)
+    }
+
+    /// Accept an new offer
+    pub fn accept_offer<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, AcceptOffer<'info>>,
+    ) -> Result<()> {
+        instructions::accept_offer::handler(ctx)
+    }
+
+    /// Buyer can claim the NFT they just bought and it will be moved to their wallet
+    pub fn claim_bought_nft<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ClaimBoughtNFT<'info>>,
+        bump: u8,
+    ) -> Result<()> {
+        instructions::claim_bought_nft::handler(ctx, bump)
+    }
+
+    /// Toggle Vault States
+    pub fn toggle_vault_nft<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ToggleVaultNFT<'info>>,
+        user: Pubkey,
+        desired_state: VaultState,
+    ) -> Result<()> {
+        instructions::toggle_vault_nft::handler(ctx, user, desired_state)
     }
 }
