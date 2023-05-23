@@ -77,10 +77,6 @@ pub struct ModifyListing<'info> {
 
     /// SPL System Program, required for account allocation.
     pub system_program: Program<'info, System>,
-    
-
-
-
 }
 
 
@@ -92,6 +88,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         let config = &ctx.accounts.config;
         let payer = &ctx.accounts.payer;
         let seller = &ctx.accounts.seller;
+        let sprinkle = &ctx.accounts.tag;
         let listing = &mut ctx.accounts.listing;
         let seller_token = &ctx.accounts.seller_token;
 
@@ -183,9 +180,11 @@ pub fn handler<'a, 'b, 'c, 'info>(
         } 
 
         listing.state = args.next_state.unwrap_or(listing.state);
+        listing.token_mint = sprinkle.token_mint;
         // Set at the bottom so we can have one run through where we can check
         // if this is the first time through.
         listing.version = ListingVersion::V1;
+
         Ok(())
 }
 

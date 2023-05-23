@@ -1,21 +1,17 @@
 import * as anchor from '@project-serum/anchor';
 import { Program } from '@project-serum/anchor';
-import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, VersionedTransaction } from '@solana/web3.js';
 import { Cupcake } from '../../target/types/cupcake';
 import { expect } from 'chai';
 import { SolanaClient } from '../../site/cupcake-data/clients/solana/SolanaClient';
 import { bnUid } from '../../site/cupcake-data/clients/solana/SolanaUtil';
-import { BakeSprinkleArgs, tagTypeSchema, tagTypeToNumber } from '../../site/cupcake-data/trpc/bakery/bakerySchemas';
+import { BakeSprinkleArgs } from '../../site/cupcake-data/trpc/bakery/bakerySchemas';
 
-import { createProgrammableNFT, createRuleSetAccount, mintNFT } from '../../wip_sdk/programmableAssets';
-import { Bakery } from '../../wip_sdk/state/bakery';
-import { createMint } from '@solana/spl-token';
-import { createAssociatedTokenAccount } from '@solana/spl-token';
-import { mintTo } from '@solana/spl-token';
-import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { mintNFT } from '../../wip_sdk/programmableAssets';
+import { createMint, createAssociatedTokenAccount, mintTo, getAssociatedTokenAddress } from '@solana/spl-token';
 const characters = '0123456789';
 
-function generateString(length) {
+function generateString(length: number) {
   let result = ' ';
   const charactersLength = characters.length;
   for (let i = 0; i < length; i++) {

@@ -79,6 +79,9 @@ pub struct Listing {
 
     /// Bump value used in the PDA generation for this Listing.
     pub bump: u8,
+
+    // Mint address of the hot-potato'd NFT being listed
+    pub token_mint: Pubkey,
 }
 
 /// Offer with seed [cupcake, bakery, tag, buyer]
@@ -138,7 +141,8 @@ impl Listing {
         9 + // price
         9 + // agreed price
         1 + // PDA bump
-        50; // buffer
+        32 + // Token mint
+        18; // buffer
 }
 
 impl Offer {
