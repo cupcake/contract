@@ -180,7 +180,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
         } 
 
         listing.state = args.next_state.unwrap_or(listing.state);
-        listing.token_mint = sprinkle.token_mint;
+        listing.sprinkle = sprinkle.key();
         // Set at the bottom so we can have one run through where we can check
         // if this is the first time through.
         listing.version = ListingVersion::V1;
